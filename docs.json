@@ -78,7 +78,8 @@
               "api/core/create-atom",
               "api/core/create-async-atom",
               "api/core/batch",
-              "api/core/flush"
+              "api/core/flush",
+              "api/core/to-observer"
             ]
           },
           {

@@ -1,0 +1,127 @@
+---
+title: toObserver
+description: Convert various callback formats to a standardized Observer object
+---
+
+# toObserver
+
+The `toObserver` utility function converts different callback formats into a standardized `Observer` object. This is primarily used internally but is exported for advanced use cases where you need to work with the observer pattern directly.
+
+## Signature
+
+```typescript
+function toObserver<T>(
+  nextHandler?: Observer<T> | ((value: T) => void),
+  errorHandler?: (error: any) => void,
+  completionHandler?: () => void,
+): Observer<T>
+```
+
+## Parameters
+
+<ParamField path="nextHandler" type="Observer<T> | ((value: T) => void)">
+  Either an Observer object with `next`, `error`, and `complete` methods, or a simple callback function that receives the next value.
+</ParamField>
+
+<ParamField path="errorHandler" type="(error: any) => void">
+  Optional error handler function called when an error occurs. Only used when `nextHandler` is a function.
+</ParamField>
+
+<ParamField path="completionHandler" type="() => void">
+  Optional completion handler called when the observable completes. Only used when `nextHandler` is a function.
+</ParamField>
+
+## Returns
+
+<ResponseField name="observer" type="Observer<T>">
+  A standardized Observer object with optional `next`, `error`, and `complete` methods.
+</ResponseField>
+
+## Usage
+
+### Convert function to observer
+
+```typescript
+import { toObserver } from '@tanstack/store'
+
+const observer = toObserver((value: number) => {
+  console.log('Value:', value)
+})
+
+// observer.next is the callback function
+observer.next?.(42) // Logs: "Value: 42"
+```
+
+### Convert with error and completion handlers
+
+```typescript
+import { toObserver } from '@tanstack/store'
+
+const observer = toObserver(
+  (value) => console.log('Next:', value),
+  (error) => console.error('Error:', error),
+  () => console.log('Complete')
+)
+
+observer.next?.(1)         // Logs: "Next: 1"
+observer.error?.(new Error('Fail'))  // Logs: "Error: Error: Fail"
+observer.complete?.()      // Logs: "Complete"
+```
+
+### Pass through existing observer
+
+```typescript
+import { toObserver } from '@tanstack/store'
+
+const existingObserver = {
+  next: (val: string) => console.log(val),
+  error: (err: Error) => console.error(err),
+  complete: () => console.log('Done')
+}
+
+const observer = toObserver(existingObserver)
+// Returns the same observer with methods bound to their context
+```
+
+### Internal usage in subscriptions
+
+This function is used internally when you call `subscribe()` on stores and atoms to normalize different callback formats:
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const store = createStore(0)
+
+// These all work because toObserver normalizes them internally:
+
+// Function callback
+store.subscribe((value) => console.log(value))
+
+// Observer object
+store.subscribe({
+  next: (value) => console.log(value),
+  error: (err) => console.error(err)
+})
+
+// Multiple callbacks (converted via toObserver)
+// Note: Direct multi-callback API not exposed, but shows the concept
+```
+
+## When to Use
+
+<Note>
+Most applications won't need to use `toObserver` directly. It's primarily an internal utility.
+</Note>
+
+You might use `toObserver` if you're:
+
+- Building custom reactive primitives that follow the observer pattern
+- Creating wrapper libraries around TanStack Store
+- Implementing advanced subscription management systems
+- Working with RxJS or other observable libraries and need format conversion
+
+## Related APIs
+
+- [Observer](/api/types/observer) - The observer interface type
+- [Subscription](/api/types/subscription) - The subscription object returned by subscribe
+- [createAtom](/api/core/create-atom) - Uses toObserver internally for subscriptions
