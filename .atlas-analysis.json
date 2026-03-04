@@ -1,0 +1,155 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "TanStack Store",
+  "projectDescription": "Framework agnostic, type-safe store with reactive framework adapters",
+  "theme": "mint",
+  "primaryColor": "#eab968",
+  "lightColor": "#7b3605",
+  "darkColor": "#4a9261",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/stores",
+              "concepts/atoms",
+              "concepts/derived-stores",
+              "concepts/subscriptions",
+              "concepts/batching"
+            ]
+          },
+          {
+            "group": "Framework Guides",
+            "pages": [
+              "frameworks/react",
+              "frameworks/vue",
+              "frameworks/solid",
+              "frameworks/angular",
+              "frameworks/svelte",
+              "frameworks/preact"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/async-atoms",
+              "guides/type-safety",
+              "guides/performance",
+              "guides/migration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/core/create-store",
+              "api/core/store-class",
+              "api/core/readonly-store",
+              "api/core/create-atom",
+              "api/core/create-async-atom",
+              "api/core/batch",
+              "api/core/flush"
+            ]
+          },
+          {
+            "group": "Types",
+            "pages": [
+              "api/types/atom",
+              "api/types/readonly-atom",
+              "api/types/observer",
+              "api/types/subscription",
+              "api/types/atom-options"
+            ]
+          },
+          {
+            "group": "React",
+            "pages": [
+              "api/react/use-store",
+              "api/react/shallow"
+            ]
+          },
+          {
+            "group": "Vue",
+            "pages": [
+              "api/vue/use-store",
+              "api/vue/shallow"
+            ]
+          },
+          {
+            "group": "Solid",
+            "pages": [
+              "api/solid/use-store",
+              "api/solid/shallow"
+            ]
+          },
+          {
+            "group": "Angular",
+            "pages": [
+              "api/angular/inject-store"
+            ]
+          },
+          {
+            "group": "Svelte",
+            "pages": [
+              "api/svelte/use-store",
+              "api/svelte/shallow"
+            ]
+          },
+          {
+            "group": "Preact",
+            "pages": [
+              "api/preact/use-store",
+              "api/preact/shallow"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Framework-agnostic reactive store implementation",
+    "Fine-grained reactivity with atoms and derived stores",
+    "Type-safe state management with TypeScript",
+    "Framework adapters for React, Vue, Solid, Angular, Svelte, and Preact",
+    "Batched updates for performance optimization",
+    "Subscription-based reactivity",
+    "Async atom support for asynchronous data",
+    "Lightweight and standalone with minimal dependencies"
+  ],
+  "publicApiSurface": [
+    "createStore",
+    "Store",
+    "ReadonlyStore",
+    "createAtom",
+    "createAsyncAtom",
+    "batch",
+    "flush",
+    "useStore (React)",
+    "useStore (Vue)",
+    "useStore (Solid)",
+    "useStore (Svelte)",
+    "useStore (Preact)",
+    "injectStore (Angular)",
+    "shallow",
+    "Atom",
+    "ReadonlyAtom",
+    "Observer",
+    "Subscription",
+    "AtomOptions"
+  ]
+}
