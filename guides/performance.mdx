@@ -1,0 +1,510 @@
+---
+title: Performance Optimization
+description: Optimize your TanStack Store applications with batching, selectors, and fine-grained reactivity
+---
+
+## Overview
+
+TanStack Store is built on [alien-signals](https://github.com/nicepkg/alien-signals), a high-performance reactive system that provides automatic optimization for most use cases. This guide covers advanced performance patterns for building highly efficient applications.
+
+## The Reactive Core
+
+TanStack Store uses a fine-grained reactive system that tracks dependencies automatically:
+
+- **Automatic dependency tracking**: Only recomputes when dependencies change
+- **Diamond dependency resolution**: Efficiently handles complex dependency graphs
+- **Lazy evaluation**: Derived stores only compute when accessed
+- **Minimal re-renders**: Subscribers only fire when values actually change
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const count = createStore(10)
+
+// Automatically tracks dependency on count
+const doubled = createStore(() => count.state * 2)
+
+// Only recomputes when count changes
+const message = createStore(() => {
+  return `Count is ${doubled.state}`
+})
+```
+
+## Batching Updates
+
+### Why Batch?
+
+Batching multiple state updates prevents unnecessary intermediate computations and notifications:
+
+```typescript
+import { batch, createStore } from '@tanstack/store'
+
+const store = createStore({ count: 0, multiplier: 1 })
+
+// ❌ Without batching: Triggers 2 updates
+store.setState((s) => ({ ...s, count: s.count + 1 }))
+store.setState((s) => ({ ...s, multiplier: 2 }))
+
+// ✅ With batching: Triggers 1 update
+batch(() => {
+  store.setState((s) => ({ ...s, count: s.count + 1 }))
+  store.setState((s) => ({ ...s, multiplier: 2 }))
+})
+```
+
+### Batch API
+
+The `batch` function defers notifications until all updates complete:
+
+```typescript
+import { batch, createStore } from '@tanstack/store'
+
+const firstName = createStore('John')
+const lastName = createStore('Doe')
+
+const fullName = createStore(() => {
+  return `${firstName.state} ${lastName.state}`
+})
+
+let notificationCount = 0
+fullName.subscribe(() => {
+  notificationCount++
+})
+
+batch(() => {
+  firstName.setState('Jane')
+  lastName.setState('Smith')
+})
+
+// Only 1 notification instead of 2!
+console.log(notificationCount) // 1
+console.log(fullName.state) // "Jane Smith"
+```
+
+### Batching Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Batch Related Updates" icon="layer-group">
+    Group state updates that logically belong together:
+
+    ```typescript
+    batch(() => {
+      userStore.setState(newUser)
+      settingsStore.setState(newSettings)
+      preferencesStore.setState(newPrefs)
+    })
+    ```
+  </Card>
+
+  <Card title="Batch in Event Handlers" icon="hand-pointer">
+    Use batching in user interactions:
+
+    ```typescript
+    function handleSubmit() {
+      batch(() => {
+        formStore.setState({ submitted: true })
+        errorsStore.setState({})
+        loadingStore.setState(true)
+      })
+    }
+    ```
+  </Card>
+</CardGroup>
+
+## Fine-Grained Subscriptions
+
+### Selective Updates
+
+Subscribe only to the data you need to avoid unnecessary re-renders:
+
+```typescript
+interface AppState {
+  user: User
+  settings: Settings
+  notifications: Notification[]
+}
+
+const appStore = createStore<AppState>(initialState)
+
+// ❌ Subscribes to all changes
+appStore.subscribe((state) => {
+  console.log(state.user.name)
+})
+
+// ✅ Create derived store for just the user name
+const userNameStore = createStore(() => appStore.state.user.name)
+userNameStore.subscribe((name) => {
+  console.log(name) // Only fires when name changes
+})
+```
+
+### Derived Store Optimization
+
+Derived stores automatically optimize by only recomputing when their dependencies change:
+
+```typescript
+const numbers = createStore([1, 2, 3, 4, 5])
+
+// Only recomputes when numbers array changes
+const sum = createStore(() => {
+  console.log('Computing sum...')
+  return numbers.state.reduce((a, b) => a + b, 0)
+})
+
+// Accessing sum multiple times doesn't recompute
+console.log(sum.state) // "Computing sum..." 15
+console.log(sum.state) // 15 (no log, uses cached value)
+console.log(sum.state) // 15 (no log, uses cached value)
+
+// Only recomputes when source changes
+numbers.setState([1, 2, 3])
+console.log(sum.state) // "Computing sum..." 6
+```
+
+## Selector Patterns
+
+### Creating Efficient Selectors
+
+Create focused derived stores that select specific slices of state:
+
+```typescript
+interface TodoState {
+  todos: Todo[]
+  filter: 'all' | 'active' | 'completed'
+  searchQuery: string
+}
+
+const todoStore = createStore<TodoState>({
+  todos: [],
+  filter: 'all',
+  searchQuery: '',
+})
+
+// Selector for filtered todos
+const filteredTodos = createStore(() => {
+  const { todos, filter } = todoStore.state
+
+  if (filter === 'all') return todos
+  if (filter === 'active') return todos.filter((t) => !t.completed)
+  return todos.filter((t) => t.completed)
+})
+
+// Selector for searched todos
+const searchedTodos = createStore(() => {
+  const todos = filteredTodos.state
+  const query = todoStore.state.searchQuery.toLowerCase()
+
+  if (!query) return todos
+  return todos.filter((t) => t.title.toLowerCase().includes(query))
+})
+
+// Component only re-renders when searchedTodos changes
+const TodoList = () => {
+  const todos = useStore(searchedTodos)
+  return <div>{todos.map(renderTodo)}</div>
+}
+```
+
+### Memoization with Selectors
+
+Selectors act as automatic memoization:
+
+```typescript
+// Expensive computation only runs when dependencies change
+const expensiveComputation = createStore(() => {
+  const data = dataStore.state
+
+  // This only runs when dataStore changes
+  return data.map((item) => {
+    return complexTransformation(item)
+  })
+})
+```
+
+## Diamond Dependency Optimization
+
+TanStack Store efficiently handles diamond dependencies (where multiple derived stores depend on the same source):
+
+```typescript
+const count = createStore(10)
+
+//        count
+//        /   \
+//    half    double
+//        \   /
+//         sum
+
+const half = createStore(() => count.state / 2)
+const double = createStore(() => count.state * 2)
+const sum = createStore(() => half.state + double.state)
+
+let computations = 0
+sum.subscribe(() => computations++)
+
+// Changing count triggers only ONE notification to sum
+count.setState(20)
+console.log(computations) // 1 (not 2!)
+console.log(sum.state) // 30 (10 + 20)
+```
+
+### Complex Diamond Dependencies
+
+The reactive system handles even complex dependency graphs efficiently:
+
+```typescript
+//         a
+//        / \
+//       b   c
+//      / \  |
+//     d   e f
+//      \ / |
+//       \ /
+//        g
+
+const a = createStore(1)
+const b = createStore(() => a.state)
+const c = createStore(() => a.state)
+const d = createStore(() => b.state)
+const e = createStore(() => b.state)
+const f = createStore(() => c.state)
+const g = createStore(() => d.state + e.state + f.state)
+
+let updates = 0
+g.subscribe(() => updates++)
+
+// Changing 'a' triggers only ONE update to 'g'
+a.setState(2)
+console.log(updates) // 1
+console.log(g.state) // 6 (2 + 2 + 2)
+```
+
+## Comparison Functions
+
+### Custom Equality Checks
+
+Provide custom comparison functions to control when updates trigger:
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+interface User {
+  id: number
+  name: string
+  lastSeen: Date
+}
+
+// Only update when id or name changes, ignore lastSeen
+const userAtom = createAtom<User>(
+  { id: 1, name: 'John', lastSeen: new Date() },
+  {
+    compare: (prev, next) => {
+      return prev.id === next.id && prev.name === next.name
+    },
+  }
+)
+
+let updates = 0
+userAtom.subscribe(() => updates++)
+
+// Doesn't trigger update (only lastSeen changed)
+userAtom.set({
+  id: 1,
+  name: 'John',
+  lastSeen: new Date(),
+})
+console.log(updates) // 0
+
+// Triggers update (name changed)
+userAtom.set({
+  id: 1,
+  name: 'Jane',
+  lastSeen: new Date(),
+})
+console.log(updates) // 1
+```
+
+### Shallow Comparison
+
+For array and object stores, use shallow comparison when appropriate:
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+function shallowEqual<T>(a: T, b: T): boolean {
+  if (Object.is(a, b)) return true
+  if (typeof a !== 'object' || a === null || typeof b !== 'object' || b === null) {
+    return false
+  }
+
+  const keysA = Object.keys(a)
+  const keysB = Object.keys(b)
+
+  if (keysA.length !== keysB.length) return false
+
+  return keysA.every((key) => Object.is(a[key], b[key]))
+}
+
+const atom = createAtom({ a: 1, b: 2 }, { compare: shallowEqual })
+```
+
+## Performance Measurement
+
+### Tracking Computations
+
+Monitor how often derived stores recompute:
+
+```typescript
+let computeCount = 0
+
+const expensiveStore = createStore(() => {
+  computeCount++
+  console.log(`Computed ${computeCount} times`)
+  return expensiveCalculation(dataStore.state)
+})
+
+// Monitor computeCount to ensure minimal recomputations
+```
+
+### Benchmarking with Vitest
+
+TanStack Store includes benchmarks for performance testing:
+
+```typescript
+// From packages/store/tests/derived.bench.ts
+import { bench, describe } from 'vitest'
+import { createStore } from '@tanstack/store'
+
+describe('derived store performance', () => {
+  bench('1000 updates with derived stores', () => {
+    const count = createStore(0)
+    const doubled = createStore(() => count.state * 2)
+
+    for (let i = 0; i < 1000; i++) {
+      count.setState(i)
+      doubled.state // Access to trigger computation
+    }
+  })
+})
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use Derived Stores for Computed Values">
+    Don't store computed values directly. Let derived stores handle them:
+
+    ```typescript
+    // ❌ Manually computing and storing
+    const store = createStore({ count: 0, doubled: 0 })
+    store.setState((s) => ({ ...s, count: 5, doubled: 10 }))
+
+    // ✅ Use derived store
+    const count = createStore(0)
+    const doubled = createStore(() => count.state * 2)
+    ```
+  </Step>
+
+  <Step title="Batch Related Updates">
+    Always batch updates that happen together:
+
+    ```typescript
+    batch(() => {
+      store1.setState(value1)
+      store2.setState(value2)
+      store3.setState(value3)
+    })
+    ```
+  </Step>
+
+  <Step title="Create Focused Selectors">
+    Build small, focused derived stores instead of one large one:
+
+    ```typescript
+    // ✅ Focused selectors
+    const userName = createStore(() => userStore.state.name)
+    const userEmail = createStore(() => userStore.state.email)
+    ```
+  </Step>
+
+  <Step title="Use Custom Comparisons Sparingly">
+    Only use custom comparison functions when necessary. The default `Object.is` comparison works well for most cases.
+  </Step>
+</Steps>
+
+## Common Performance Pitfalls
+
+<Warning>
+  **Avoid creating derived stores inside components**
+
+  ```typescript
+  // ❌ Bad: Creates new store on every render
+  function Component() {
+    const derived = createStore(() => store.state.value * 2)
+    return <div>{derived.state}</div>
+  }
+
+  // ✅ Good: Create stores outside components
+  const derived = createStore(() => store.state.value * 2)
+  function Component() {
+    return <div>{derived.state}</div>
+  }
+  ```
+</Warning>
+
+<Warning>
+  **Avoid accessing stores in loops**
+
+  ```typescript
+  // ❌ Bad: Accesses store repeatedly
+  for (let i = 0; i < items.length; i++) {
+    process(store.state, items[i])
+  }
+
+  // ✅ Good: Access once, use value in loop
+  const state = store.state
+  for (let i = 0; i < items.length; i++) {
+    process(state, items[i])
+  }
+  ```
+</Warning>
+
+## Profiling Tools
+
+### Browser DevTools
+
+Use React DevTools Profiler to identify unnecessary re-renders:
+
+1. Open React DevTools
+2. Go to Profiler tab
+3. Record interactions
+4. Look for components that re-render when they shouldn't
+
+### Performance Testing
+
+Write performance tests to catch regressions:
+
+```typescript
+import { expect, test } from 'vitest'
+import { createStore } from '@tanstack/store'
+
+test('updates should complete in under 100ms', () => {
+  const store = createStore(0)
+  const derived = createStore(() => store.state * 2)
+
+  const start = performance.now()
+
+  for (let i = 0; i < 1000; i++) {
+    store.setState(i)
+    derived.state // Trigger computation
+  }
+
+  const duration = performance.now() - start
+  expect(duration).toBeLessThan(100)
+})
+```
+
+## Next Steps
+
+- Learn about [Migration](/guides/migration) from other state libraries
+- Explore [Type Safety](/guides/type-safety) for better DX
+- Check out [batch API](/api/core/batch) for batching details

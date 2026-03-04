@@ -1,0 +1,443 @@
+---
+title: Svelte
+description: Use TanStack Store in Svelte applications
+---
+
+TanStack Store provides Svelte support through the `@tanstack/svelte-store` package, which integrates with Svelte 5's runes-based reactivity system.
+
+## Installation
+
+Install the Svelte adapter package:
+
+<CodeGroup>
+
+```bash npm
+npm install @tanstack/svelte-store
+```
+
+```bash pnpm
+pnpm add @tanstack/svelte-store
+```
+
+```bash yarn
+yarn add @tanstack/svelte-store
+```
+
+```bash bun
+bun add @tanstack/svelte-store
+```
+
+</CodeGroup>
+
+<Note>
+  The `@tanstack/svelte-store` package re-exports everything from `@tanstack/store`, so you only need to install the Svelte package.
+</Note>
+
+## Svelte Version Requirements
+
+<Warning>
+  This package requires Svelte 5.0+ as it uses runes (`$state` and `$effect`).
+</Warning>
+
+## Basic Usage
+
+The primary way to use TanStack Store in Svelte is through the `useStore` function:
+
+```svelte
+<script lang="ts">
+  import { createStore, useStore } from '@tanstack/svelte-store'
+
+  // Create a store
+  const counterStore = createStore({
+    count: 0,
+  })
+
+  // Subscribe to the store
+  const count = useStore(counterStore, (state) => state.count)
+
+  function increment() {
+    counterStore.setState((prev) => ({ count: prev.count + 1 }))
+  }
+</script>
+
+<div>
+  <p>Count: {count.current}</p>
+  <button onclick={increment}>Increment</button>
+</div>
+```
+
+## The useStore Function
+
+The `useStore` function subscribes your component to store updates using Svelte 5's runes.
+
+### Signature
+
+```typescript
+function useStore<TState, TSelected>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: TState) => TSelected,
+  options?: { equal?: (a: TSelected, b: TSelected) => boolean }
+): { readonly current: TSelected }
+```
+
+### Parameters
+
+- `store` - The store instance to subscribe to
+- `selector` - (Optional) A function that selects which part of the state you need. Defaults to returning the entire state
+- `options.equal` - (Optional) A custom equality function. Defaults to `shallow`
+
+### Return Value
+
+Returns an object with a readonly `current` property containing the selected state. Access it like `count.current`.
+
+<Note>
+  The return value uses `$state` internally, so it's reactive and will trigger re-renders when the selected value changes.
+</Note>
+
+## Selector Optimization
+
+The selector function allows you to subscribe to only the parts of state you need:
+
+```svelte
+<script lang="ts">
+  import { createStore, useStore } from '@tanstack/svelte-store'
+
+  const appStore = createStore({
+    user: { name: 'Alice', age: 30 },
+    settings: { theme: 'dark', notifications: true },
+  })
+
+  // Only updates when user.name changes
+  const userName = useStore(appStore, (state) => state.user.name)
+
+  // Only updates when settings change
+  const settings = useStore(appStore, (state) => state.settings)
+</script>
+
+<div>
+  <h1>Welcome, {userName.current}!</h1>
+  <div>
+    <p>Theme: {settings.current.theme}</p>
+    <p>Notifications: {settings.current.notifications ? 'On' : 'Off'}</p>
+  </div>
+</div>
+```
+
+## Custom Equality Functions
+
+For complex state selections, provide a custom equality function:
+
+```svelte
+<script lang="ts">
+  import { createStore, useStore } from '@tanstack/svelte-store'
+
+  const todoStore = createStore({
+    todos: [
+      { id: 1, text: 'Buy groceries', completed: false },
+      { id: 2, text: 'Walk the dog', completed: true },
+    ],
+  })
+
+  function deepEqual<T>(a: T, b: T): boolean {
+    return JSON.stringify(a) === JSON.stringify(b)
+  }
+
+  // Use deep equality for array comparison
+  const activeTodos = useStore(
+    todoStore,
+    (state) => state.todos.filter((todo) => !todo.completed),
+    { equal: deepEqual }
+  )
+</script>
+
+<ul>
+  {#each activeTodos.current as todo (todo.id)}
+    <li>{todo.text}</li>
+  {/each}
+</ul>
+```
+
+## Shallow Equality
+
+The package exports a `shallow` utility for shallow object comparison (this is the default):
+
+```svelte
+<script lang="ts">
+  import { createStore, useStore, shallow } from '@tanstack/svelte-store'
+
+  const userStore = createStore({
+    profile: { name: 'Alice', email: 'alice@example.com' },
+    preferences: { theme: 'dark' },
+  })
+
+  // Explicitly use shallow comparison (this is the default)
+  const profile = useStore(
+    userStore,
+    (state) => state.profile,
+    { equal: shallow }
+  )
+</script>
+
+<div>
+  <h2>{profile.current.name}</h2>
+  <p>{profile.current.email}</p>
+</div>
+```
+
+## Complete Example: Todo App
+
+Here's a complete Todo application using Svelte 5:
+
+```svelte
+<script lang="ts">
+  import { createStore, useStore } from '@tanstack/svelte-store'
+
+  interface Todo {
+    id: number
+    text: string
+    completed: boolean
+  }
+
+  interface TodoState {
+    todos: Todo[]
+    filter: 'all' | 'active' | 'completed'
+  }
+
+  const todoStore = createStore<TodoState>({
+    todos: [],
+    filter: 'all',
+  })
+
+  // Actions
+  const addTodo = (text: string) => {
+    todoStore.setState((state) => ({
+      ...state,
+      todos: [
+        ...state.todos,
+        { id: Date.now(), text, completed: false },
+      ],
+    }))
+  }
+
+  const toggleTodo = (id: number) => {
+    todoStore.setState((state) => ({
+      ...state,
+      todos: state.todos.map((todo) =>
+        todo.id === id ? { ...todo, completed: !todo.completed } : todo
+      ),
+    }))
+  }
+
+  const setFilter = (filter: TodoState['filter']) => {
+    todoStore.setState((state) => ({ ...state, filter }))
+  }
+
+  // Component state
+  let input = $state('')
+
+  // Subscribe to store
+  const filter = useStore(todoStore, (state) => state.filter)
+  const todos = useStore(todoStore, (state) => {
+    const { todos, filter } = state
+    if (filter === 'active') return todos.filter((t) => !t.completed)
+    if (filter === 'completed') return todos.filter((t) => t.completed)
+    return todos
+  })
+
+  function handleSubmit(e: Event) {
+    e.preventDefault()
+    if (input.trim()) {
+      addTodo(input)
+      input = ''
+    }
+  }
+</script>
+
+<div>
+  <h1>Todo App</h1>
+  
+  <form onsubmit={handleSubmit}>
+    <input
+      bind:value={input}
+      placeholder="What needs to be done?"
+    />
+    <button type="submit">Add</button>
+  </form>
+
+  <div>
+    <button onclick={() => setFilter('all')}>All</button>
+    <button onclick={() => setFilter('active')}>Active</button>
+    <button onclick={() => setFilter('completed')}>Completed</button>
+  </div>
+
+  <ul>
+    {#each todos.current as todo (todo.id)}
+      <li>
+        <input
+          type="checkbox"
+          checked={todo.completed}
+          onchange={() => toggleTodo(todo.id)}
+        />
+        <span style:text-decoration={todo.completed ? 'line-through' : 'none'}>
+          {todo.text}
+        </span>
+      </li>
+    {/each}
+  </ul>
+</div>
+```
+
+## Svelte-Specific Considerations
+
+### Runes Integration
+
+The Svelte adapter uses Svelte 5's runes:
+- Uses `$state` internally to track changes
+- Uses `$effect` for subscriptions and cleanup
+- Fully reactive and integrates with Svelte's fine-grained reactivity
+
+### Working with Svelte's Reactivity
+
+You can combine store values with Svelte's runes:
+
+```svelte
+<script lang="ts">
+  import { createStore, useStore } from '@tanstack/svelte-store'
+
+  const countStore = createStore({ count: 0, multiplier: 2 })
+
+  const count = useStore(countStore, (state) => state.count)
+  const multiplier = useStore(countStore, (state) => state.multiplier)
+  
+  // Use with $derived
+  const result = $derived(count.current * multiplier.current)
+  
+  // Use with $effect
+  $effect(() => {
+    console.log('Count changed:', count.current)
+  })
+</script>
+
+<div>Result: {result}</div>
+```
+
+### Server-Side Rendering (SSR)
+
+TanStack Store works with SvelteKit:
+
+```typescript
+// stores/app.ts
+import { createStore } from '@tanstack/svelte-store'
+
+export const appStore = createStore({
+  data: null,
+  isLoading: false,
+})
+
+export function initializeStore(initialData: any) {
+  appStore.setState({ data: initialData, isLoading: false })
+}
+```
+
+```svelte
+<!-- +page.svelte -->
+<script lang="ts">
+  import { useStore } from '@tanstack/svelte-store'
+  import { appStore } from '$lib/stores/app'
+
+  const data = useStore(appStore, (state) => state.data)
+</script>
+
+<div>{JSON.stringify(data.current)}</div>
+```
+
+### Performance Tips
+
+1. **Use selective subscriptions**: Subscribe only to the state you need
+2. **Leverage runes**: Combine with `$derived` for computed values
+3. **Multiple stores**: Create focused stores for different domains
+4. **Default shallow equality**: Works well for most use cases
+
+## Derived Stores
+
+Create derived stores that react to other stores:
+
+```svelte
+<script lang="ts">
+  import { createStore, useStore } from '@tanstack/svelte-store'
+
+  const countStore = createStore(0)
+  const doubleStore = createStore(() => ({ value: countStore.state * 2 }))
+
+  const count = useStore(countStore, (state) => state)
+  const double = useStore(doubleStore, (state) => state.value)
+
+  function increment() {
+    countStore.setState((prev) => prev + 1)
+  }
+</script>
+
+<div>
+  <p>Count: {count.current}</p>
+  <p>Double: {double.current}</p>
+  <button onclick={increment}>Increment</button>
+</div>
+```
+
+## Comparison with Svelte Stores
+
+You can use TanStack Store alongside Svelte's built-in stores:
+
+```svelte
+<script lang="ts">
+  import { writable } from 'svelte/store'
+  import { createStore, useStore } from '@tanstack/svelte-store'
+
+  // Svelte store for local state
+  const localStore = writable({ items: [] })
+
+  // TanStack Store for global state
+  const globalStore = createStore({ user: null })
+  const user = useStore(globalStore, (state) => state.user)
+
+  // Use both!
+</script>
+```
+
+**Why use TanStack Store over Svelte stores?**
+- Type-safe selector functions
+- Built-in shallow equality checking
+- Consistent API across frameworks
+- Advanced features like derived stores
+
+## API Reference
+
+For detailed API documentation, see:
+- See the API reference for detailed documentation:
+- 
+
+## TypeScript Support
+
+The Svelte adapter provides full TypeScript support:
+
+```svelte
+<script lang="ts">
+  import { createStore, useStore } from '@tanstack/svelte-store'
+
+  interface AppState {
+    user: { name: string; id: number }
+    isAuthenticated: boolean
+  }
+
+  const store = createStore<AppState>({
+    user: { name: '', id: 0 },
+    isAuthenticated: false,
+  })
+
+  // TypeScript infers the correct types
+  const userName = useStore(store, (state) => state.user.name)
+  // userName.current is string
+</script>
+
+<div>{userName.current}</div>
+```

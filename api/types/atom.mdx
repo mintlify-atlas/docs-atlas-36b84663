@@ -1,0 +1,126 @@
+---
+title: Atom
+description: The Atom type represents a writable reactive state container
+---
+
+# Atom
+
+The `Atom<T>` type represents a writable reactive state container that can be read, written, and subscribed to for changes.
+
+## Type Definition
+
+```typescript
+interface Atom<T> extends BaseAtom<T> {
+  /** Sets the value of the atom using a function. */
+  set: ((fn: (prevVal: T) => T) => void) & ((value: T) => void)
+}
+
+interface BaseAtom<T> extends Subscribable<T>, Readable<T> {}
+```
+
+## Properties
+
+### `set`
+
+Sets the value of the atom. Can be called with either a new value directly or a function that receives the previous value and returns the new value.
+
+**Type:**
+```typescript
+((fn: (prevVal: T) => T) => void) & ((value: T) => void)
+```
+
+### `get`
+
+Inherited from `Readable<T>`. Returns the current value of the atom.
+
+**Type:**
+```typescript
+() => T
+```
+
+### `subscribe`
+
+Inherited from `Subscribable<T>`. Subscribes to changes in the atom's value.
+
+**Type:**
+```typescript
+((observer: Observer<T>) => Subscription) &
+  ((
+    next: (value: T) => void,
+    error?: (error: any) => void,
+    complete?: () => void,
+  ) => Subscription)
+```
+
+## Usage Examples
+
+### Setting values directly
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const counterAtom = atom(0)
+
+// Set a new value directly
+counterAtom.set(5)
+
+console.log(counterAtom.get()) // 5
+```
+
+### Setting values with a function
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const counterAtom = atom(0)
+
+// Update based on previous value
+counterAtom.set((prev) => prev + 1)
+
+console.log(counterAtom.get()) // 1
+```
+
+### Reading and subscribing
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const counterAtom = atom(0)
+
+// Subscribe to changes
+const subscription = counterAtom.subscribe((value) => {
+  console.log('Counter changed:', value)
+})
+
+// Update the atom
+counterAtom.set(1) // Logs: "Counter changed: 1"
+counterAtom.set(2) // Logs: "Counter changed: 2"
+
+// Clean up
+subscription.unsubscribe()
+```
+
+### Working with complex state
+
+```typescript
+import { atom } from '@tanstack/store'
+
+interface User {
+  name: string
+  age: number
+}
+
+const userAtom = atom<User>({ name: 'John', age: 30 })
+
+// Update specific properties
+userAtom.set((prev) => ({ ...prev, age: prev.age + 1 }))
+
+console.log(userAtom.get()) // { name: 'John', age: 31 }
+```
+
+## Related Types
+
+- [ReadonlyAtom](/api/types/readonly-atom) - A read-only version of Atom
+- [Observer](/api/types/observer) - The observer pattern for subscriptions
+- [Subscription](/api/types/subscription) - The subscription object returned by subscribe
+- [AtomOptions](/api/types/atom-options) - Configuration options for creating atoms

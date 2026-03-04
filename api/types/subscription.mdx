@@ -1,0 +1,247 @@
+---
+title: Subscription
+description: The Subscription type for managing atom subscriptions
+---
+
+# Subscription
+
+The `Subscription` type represents a subscription to an atom's changes. It provides a method to unsubscribe and stop receiving updates.
+
+## Type Definition
+
+```typescript
+interface Subscription {
+  unsubscribe: () => void
+}
+```
+
+## Properties
+
+### `unsubscribe`
+
+Unsubscribes from the atom and stops receiving updates. After calling this method, the observer will no longer be notified of changes.
+
+**Type:**
+```typescript
+() => void
+```
+
+## Usage Examples
+
+### Basic subscription and cleanup
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const counterAtom = atom(0)
+
+// Subscribe to changes
+const subscription = counterAtom.subscribe((value) => {
+  console.log('Counter:', value)
+})
+
+counterAtom.set(1) // Logs: "Counter: 1"
+counterAtom.set(2) // Logs: "Counter: 2"
+
+// Unsubscribe when done
+subscription.unsubscribe()
+
+counterAtom.set(3) // No log - subscription is inactive
+```
+
+### Multiple subscriptions
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const dataAtom = atom('initial')
+
+const subscription1 = dataAtom.subscribe((value) => {
+  console.log('Subscriber 1:', value)
+})
+
+const subscription2 = dataAtom.subscribe((value) => {
+  console.log('Subscriber 2:', value)
+})
+
+dataAtom.set('updated')
+// Logs:
+// "Subscriber 1: updated"
+// "Subscriber 2: updated"
+
+// Unsubscribe only the first
+subscription1.unsubscribe()
+
+dataAtom.set('changed')
+// Only logs: "Subscriber 2: changed"
+
+subscription2.unsubscribe()
+```
+
+### Cleanup in useEffect (React)
+
+```typescript
+import { useEffect, useState } from 'react'
+import { atom } from '@tanstack/store'
+
+const counterAtom = atom(0)
+
+function Counter() {
+  const [count, setCount] = useState(counterAtom.get())
+
+  useEffect(() => {
+    // Subscribe to changes
+    const subscription = counterAtom.subscribe((value) => {
+      setCount(value)
+    })
+
+    // Cleanup function that unsubscribes
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  return <div>Count: {count}</div>
+}
+```
+
+### Conditional subscription
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const statusAtom = atom<'active' | 'inactive'>('inactive')
+const dataAtom = atom(0)
+
+let subscription: Subscription | null = null
+
+function manageSubscription() {
+  statusAtom.subscribe((status) => {
+    if (status === 'active' && !subscription) {
+      // Start subscription when active
+      subscription = dataAtom.subscribe((value) => {
+        console.log('Data:', value)
+      })
+    } else if (status === 'inactive' && subscription) {
+      // Stop subscription when inactive
+      subscription.unsubscribe()
+      subscription = null
+    }
+  })
+}
+
+manageSubscription()
+
+statusAtom.set('active')
+dataAtom.set(1) // Logs: "Data: 1"
+
+statusAtom.set('inactive')
+dataAtom.set(2) // No log - subscription is inactive
+```
+
+### Collecting multiple subscriptions
+
+```typescript
+import { atom, type Subscription } from '@tanstack/store'
+
+const atom1 = atom(0)
+const atom2 = atom('hello')
+const atom3 = atom(true)
+
+class SubscriptionManager {
+  private subscriptions: Subscription[] = []
+
+  add(subscription: Subscription): void {
+    this.subscriptions.push(subscription)
+  }
+
+  unsubscribeAll(): void {
+    this.subscriptions.forEach((sub) => sub.unsubscribe())
+    this.subscriptions = []
+  }
+}
+
+const manager = new SubscriptionManager()
+
+manager.add(atom1.subscribe((v) => console.log('Atom1:', v)))
+manager.add(atom2.subscribe((v) => console.log('Atom2:', v)))
+manager.add(atom3.subscribe((v) => console.log('Atom3:', v)))
+
+atom1.set(1)       // Logs: "Atom1: 1"
+atom2.set('world') // Logs: "Atom2: world"
+
+// Cleanup all subscriptions at once
+manager.unsubscribeAll()
+
+atom3.set(false) // No log - all subscriptions are inactive
+```
+
+### Auto-unsubscribe after condition
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const counterAtom = atom(0)
+
+function subscribeUntil(condition: (value: number) => boolean) {
+  const subscription = counterAtom.subscribe((value) => {
+    console.log('Counter:', value)
+    
+    if (condition(value)) {
+      console.log('Condition met, unsubscribing')
+      subscription.unsubscribe()
+    }
+  })
+  
+  return subscription
+}
+
+// Subscribe until counter reaches 5
+subscribeUntil((value) => value >= 5)
+
+counterAtom.set(1) // Logs: "Counter: 1"
+counterAtom.set(3) // Logs: "Counter: 3"
+counterAtom.set(5) // Logs: "Counter: 5" and "Condition met, unsubscribing"
+counterAtom.set(7) // No log - already unsubscribed
+```
+
+### Temporary subscription
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const dataAtom = atom('initial')
+
+function temporarySubscribe(duration: number) {
+  const subscription = dataAtom.subscribe((value) => {
+    console.log('Temporary subscriber:', value)
+  })
+
+  // Auto-unsubscribe after duration
+  setTimeout(() => {
+    subscription.unsubscribe()
+    console.log('Temporary subscription ended')
+  }, duration)
+
+  return subscription
+}
+
+temporarySubscribe(1000) // Unsubscribes after 1 second
+
+dataAtom.set('value1') // Logs if within 1 second
+setTimeout(() => dataAtom.set('value2'), 500)  // Logs: "Temporary subscriber: value2"
+setTimeout(() => dataAtom.set('value3'), 1500) // No log - subscription ended
+```
+
+## Best Practices
+
+1. **Always unsubscribe**: Remember to call `unsubscribe()` when you no longer need updates to prevent memory leaks
+2. **Cleanup in effects**: In React or similar frameworks, return the unsubscribe function from your effect cleanup
+3. **Store subscriptions**: Keep references to subscriptions you might need to cancel later
+4. **Multiple subscriptions**: You can have multiple subscriptions to the same atom; each needs to be unsubscribed independently
+
+## Related Types
+
+- [Observer](/api/types/observer) - The observer interface used when subscribing
+- [Atom](/api/types/atom) - The writable atom type that returns subscriptions
+- [ReadonlyAtom](/api/types/readonly-atom) - The read-only atom type that returns subscriptions

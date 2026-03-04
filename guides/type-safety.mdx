@@ -1,0 +1,488 @@
+---
+title: Type Safety
+description: Master TypeScript patterns and type inference in TanStack Store for rock-solid type safety
+---
+
+## Overview
+
+TanStack Store is built with TypeScript from the ground up, providing excellent type inference and type safety throughout your application. This guide covers TypeScript patterns, generic types, and best practices for maintaining type safety.
+
+## Type Inference
+
+### Automatic Type Inference
+
+TanStack Store automatically infers types from initial values:
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+// Type is inferred as Store<number>
+const countStore = createStore(0)
+
+// ✅ Type-safe: accepts number
+countStore.setState(10)
+
+// ❌ Type error: Type 'string' is not assignable to type 'number'
+countStore.setState('hello')
+```
+
+### Derived Store Type Inference
+
+Derived stores automatically infer their return type:
+
+```typescript
+const countStore = createStore(10)
+
+// Type is inferred as ReadonlyStore<number>
+const doubledStore = createStore(() => countStore.state * 2)
+
+// Type is inferred as ReadonlyStore<string>
+const messageStore = createStore(() => {
+  const count = countStore.state
+  return `Count is ${count}`
+})
+```
+
+## Explicit Type Annotations
+
+### When to Use Type Annotations
+
+Use explicit type annotations when:
+- The initial value is `null` or `undefined`
+- You want to enforce a specific interface
+- Working with complex or nested types
+
+```typescript
+interface User {
+  id: number
+  name: string
+  email: string
+}
+
+// Explicit type annotation for nullable values
+const userStore = createStore<User | null>(null)
+
+// Type annotation for complex objects
+const stateStore = createStore<User>({
+  id: 1,
+  name: 'John Doe',
+  email: 'john@example.com',
+})
+```
+
+## Type-Safe State Updates
+
+### Function Updaters
+
+Function updaters provide the previous state with full type safety:
+
+```typescript
+interface Counter {
+  count: number
+  lastUpdated: Date
+}
+
+const counterStore = createStore<Counter>({
+  count: 0,
+  lastUpdated: new Date(),
+})
+
+// ✅ Type-safe: prev is typed as Counter
+counterStore.setState((prev) => ({
+  ...prev,
+  count: prev.count + 1,
+  lastUpdated: new Date(),
+}))
+
+// ❌ Type error: Property 'invalid' does not exist on type 'Counter'
+counterStore.setState((prev) => ({
+  ...prev,
+  invalid: true,
+}))
+```
+
+### Direct Value Updates
+
+Direct value updates are also type-checked:
+
+```typescript
+const nameStore = createStore('John')
+
+// ✅ Type-safe
+nameStore.setState('Jane')
+
+// ❌ Type error
+nameStore.setState(123)
+```
+
+## Generic Types and Atoms
+
+### Generic Atom Creation
+
+Create reusable atom factories with generics:
+
+```typescript
+import { createAtom, ReadonlyAtom } from '@tanstack/store'
+
+function createLoadingAtom<T>(
+  initialValue: T
+): {
+  dataAtom: ReadonlyAtom<T>
+  loadingAtom: ReadonlyAtom<boolean>
+} {
+  const atom = createAtom(initialValue)
+  const loadingAtom = createAtom(false)
+
+  return {
+    dataAtom: atom,
+    loadingAtom: loadingAtom,
+  }
+}
+
+// Usage with full type inference
+const { dataAtom, loadingAtom } = createLoadingAtom<string[]>([])
+```
+
+### Constrained Generics
+
+Use type constraints for more specific generic types:
+
+```typescript
+interface Entity {
+  id: number
+}
+
+function createEntityStore<T extends Entity>(initialEntity: T) {
+  const store = createStore(initialEntity)
+
+  const updateEntity = (updates: Partial<T>) => {
+    store.setState((prev) => ({
+      ...prev,
+      ...updates,
+    }))
+  }
+
+  return { store, updateEntity }
+}
+
+interface User extends Entity {
+  name: string
+  email: string
+}
+
+const { store, updateEntity } = createEntityStore<User>({
+  id: 1,
+  name: 'John',
+  email: 'john@example.com',
+})
+
+// ✅ Type-safe updates
+updateEntity({ name: 'Jane' })
+
+// ❌ Type error: 'invalid' does not exist in type 'User'
+updateEntity({ invalid: true })
+```
+
+## Working with Union Types
+
+### Discriminated Unions
+
+Use discriminated unions for type-safe state machines:
+
+```typescript
+type RequestState<T> =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: T }
+  | { status: 'error'; error: string }
+
+const requestStore = createStore<RequestState<User>>({
+  status: 'idle',
+})
+
+// Type-safe state transitions
+requestStore.setState({ status: 'loading' })
+
+requestStore.setState({
+  status: 'success',
+  data: { id: 1, name: 'John', email: 'john@example.com' },
+})
+
+requestStore.setState({
+  status: 'error',
+  error: 'Failed to fetch user',
+})
+
+// Type narrowing in derived stores
+const userDataStore = createStore(() => {
+  const state = requestStore.state
+  if (state.status === 'success') {
+    // TypeScript knows state.data is available here
+    return state.data
+  }
+  return null
+})
+```
+
+## Type Safety with Subscriptions
+
+### Typed Observers
+
+Subscriptions receive properly typed values:
+
+```typescript
+interface AppState {
+  count: number
+  message: string
+}
+
+const appStore = createStore<AppState>({
+  count: 0,
+  message: 'Hello',
+})
+
+// value is typed as AppState
+appStore.subscribe((value) => {
+  console.log(value.count) // ✅ Type-safe
+  console.log(value.invalid) // ❌ Type error
+})
+
+// Observer pattern with full typing
+appStore.subscribe({
+  next: (value: AppState) => {
+    console.log('State updated:', value)
+  },
+  error: (error: unknown) => {
+    console.error('Error:', error)
+  },
+})
+```
+
+## Advanced Type Patterns
+
+### Readonly vs Mutable Stores
+
+TanStack Store distinguishes between mutable and readonly stores at the type level:
+
+```typescript
+import { Store, ReadonlyStore } from '@tanstack/store'
+
+// Mutable store (created with initial value)
+const mutableStore = createStore(0)
+type MutableType = typeof mutableStore // Store<number>
+mutableStore.setState(10) // ✅ Has setState method
+
+// Readonly store (created with function)
+const readonlyStore = createStore(() => mutableStore.state * 2)
+type ReadonlyType = typeof readonlyStore // ReadonlyStore<number>
+// readonlyStore.setState(10) // ❌ Type error: Property 'setState' does not exist
+```
+
+### Type Guards for Complex States
+
+Create type guards for complex state shapes:
+
+```typescript
+type AsyncState<T, E = Error> =
+  | { status: 'pending' }
+  | { status: 'success'; data: T }
+  | { status: 'error'; error: E }
+
+function isSuccess<T, E>(
+  state: AsyncState<T, E>
+): state is { status: 'success'; data: T } {
+  return state.status === 'success'
+}
+
+function isError<T, E>(
+  state: AsyncState<T, E>
+): state is { status: 'error'; error: E } {
+  return state.status === 'error'
+}
+
+const asyncStore = createStore<AsyncState<User>>({
+  status: 'pending',
+})
+
+const state = asyncStore.state
+
+if (isSuccess(state)) {
+  // TypeScript knows state.data is available
+  console.log(state.data.name)
+}
+
+if (isError(state)) {
+  // TypeScript knows state.error is available
+  console.error(state.error)
+}
+```
+
+### Mapped Types for Store Collections
+
+Create type-safe collections of stores:
+
+```typescript
+type StoreCollection<T> = {
+  [K in keyof T]: Store<T[K]>
+}
+
+interface FormFields {
+  username: string
+  email: string
+  age: number
+}
+
+function createFormStores<T extends Record<string, any>>(
+  initialValues: T
+): StoreCollection<T> {
+  const stores = {} as StoreCollection<T>
+
+  for (const key in initialValues) {
+    stores[key] = createStore(initialValues[key])
+  }
+
+  return stores
+}
+
+const formStores = createFormStores<FormFields>({
+  username: '',
+  email: '',
+  age: 0,
+})
+
+// ✅ Fully typed
+formStores.username.setState('john_doe')
+formStores.age.setState(25)
+
+// ❌ Type error
+formStores.username.setState(123)
+```
+
+## NoInfer for Improved Type Inference
+
+TanStack Store uses TypeScript's `NoInfer` utility type internally to prevent unintended type inference:
+
+```typescript
+// From source: packages/store/src/store.ts:6
+constructor(getValue: (prev?: NoInfer<T>) => T)
+
+// This prevents TypeScript from inferring T from the function parameter
+// ensuring the type flows from the return value instead
+```
+
+This pattern ensures that:
+- Generic types are inferred correctly
+- Function parameters don't widen the inferred type
+- Return types take precedence in type inference
+
+## Type Testing
+
+Test your types using TypeScript's type checking:
+
+```typescript
+import { expectType } from 'vitest'
+import { createStore, Store, ReadonlyStore } from '@tanstack/store'
+
+// Test that types are inferred correctly
+const numStore = createStore(0)
+expectType<Store<number>>(numStore)
+
+const strStore = createStore('hello')
+expectType<Store<string>>(strStore)
+
+// Test readonly stores
+const derivedStore = createStore(() => numStore.state * 2)
+expectType<ReadonlyStore<number>>(derivedStore)
+
+// Type error tests can be done with @ts-expect-error
+// @ts-expect-error - Cannot call setState on readonly store
+derivedStore.setState(10)
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Type Inference When Possible">
+    Let TypeScript infer types from your initial values. This reduces boilerplate and keeps your code maintainable:
+
+    ```typescript
+    // ✅ Good: Type inferred as Store<number>
+    const count = createStore(0)
+
+    // ❌ Unnecessary: Redundant type annotation
+    const count = createStore<number>(0)
+    ```
+  </Accordion>
+
+  <Accordion title="Annotate Complex Types">
+    Use explicit type annotations for complex interfaces or when the initial value doesn't fully represent the type:
+
+    ```typescript
+    // ✅ Good: Clear interface definition
+    interface AppState {
+      user: User | null
+      settings: Settings
+    }
+    const appStore = createStore<AppState>(initialState)
+    ```
+  </Accordion>
+
+  <Accordion title="Use Discriminated Unions for State Machines">
+    Leverage TypeScript's discriminated unions for type-safe state transitions:
+
+    ```typescript
+    type State =
+      | { status: 'idle' }
+      | { status: 'loading' }
+      | { status: 'success'; data: Data }
+      | { status: 'error'; error: Error }
+    ```
+  </Accordion>
+
+  <Accordion title="Create Type Guards for Complex Logic">
+    Use type guards to narrow types and improve type safety:
+
+    ```typescript
+    function isLoaded<T>(state: State<T>): state is { data: T } {
+      return 'data' in state
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Common Type Errors and Solutions
+
+### Error: Type is not assignable
+
+```typescript
+// ❌ Error: Type 'string' is not assignable to type 'number'
+const store = createStore(0)
+store.setState('hello')
+
+// ✅ Solution: Ensure the value matches the store's type
+store.setState(42)
+```
+
+### Error: Property does not exist on type
+
+```typescript
+interface User {
+  name: string
+}
+
+const userStore = createStore<User>({ name: 'John' })
+
+// ❌ Error: Property 'age' does not exist on type 'User'
+userStore.setState({ name: 'Jane', age: 30 })
+
+// ✅ Solution: Extend the interface or use a different type
+interface ExtendedUser extends User {
+  age: number
+}
+```
+
+## Next Steps
+
+- Explore [Performance](/guides/performance) optimization with selectors
+- Learn about [Async Atoms](/guides/async-atoms) for async data
+- See [createStore API](/api/core/create-store) for complete type signatures

@@ -1,0 +1,202 @@
+---
+title: shallow
+description: Shallow equality comparison function for Svelte Store
+---
+
+## Reference
+
+### `shallow`
+
+```ts
+function shallow<T>(objA: T, objB: T): boolean
+```
+
+A utility function that performs shallow equality comparison between two values. Used as the default equality function in `useStore` to prevent unnecessary reactivity updates.
+
+<ParamField path="objA" type="T">
+  The first value to compare.
+</ParamField>
+
+<ParamField path="objB" type="T">
+  The second value to compare.
+</ParamField>
+
+### Returns
+
+<ResponseField name="boolean" type="boolean">
+  `true` if the values are shallowly equal, `false` otherwise.
+</ResponseField>
+
+## Comparison Behavior
+
+The `shallow` function handles various data types:
+
+- **Reference equality**: Returns `true` if `Object.is(objA, objB)`
+- **Primitives/null**: Returns `false` if either value is not an object
+- **Map**: Compares size and all entries using `Object.is`
+- **Set**: Compares size and all values for presence
+- **Date**: Compares timestamps using `getTime()`
+- **Objects**: Compares own properties using `Object.is`
+
+## Usage
+
+### Default Behavior
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+// shallow is used by default
+const user = useStore(store, (state) => state.user)
+</script>
+
+<div>{user.current.name}</div>
+```
+
+### Explicit Usage
+
+```svelte
+<script>
+import { useStore, shallow } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const user = useStore(
+  store,
+  (state) => ({
+    name: state.name,
+    email: state.email
+  }),
+  { equal: shallow }
+)
+</script>
+
+<div>
+  <h2>{user.current.name}</h2>
+  <p>{user.current.email}</p>
+</div>
+```
+
+### Reference Equality
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+// Use strict reference equality
+const items = useStore(
+  store,
+  (state) => state.items,
+  { equal: (a, b) => a === b }
+)
+</script>
+
+<ul>
+  {#each items.current as item (item.id)}
+    <li>{item.name}</li>
+  {/each}
+</ul>
+```
+
+### Selecting Object Slices
+
+```svelte
+<script>
+import { useStore, shallow } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const config = useStore(
+  store,
+  (state) => ({
+    theme: state.config.theme,
+    language: state.config.language,
+    notifications: state.config.notifications
+  }),
+  { equal: shallow }
+)
+</script>
+
+<div>
+  <p>Theme: {config.current.theme}</p>
+  <p>Language: {config.current.language}</p>
+</div>
+```
+
+### Array Filtering
+
+```svelte
+<script>
+import { useStore, shallow } from '@tanstack/svelte-store'
+import { store } from './store'
+
+// Shallow comparison prevents updates when filtered array content matches
+const activeUsers = useStore(
+  store,
+  (state) => state.users.filter(u => u.active),
+  { equal: shallow }
+)
+</script>
+
+<div>
+  <p>Active users: {activeUsers.current.length}</p>
+  <ul>
+    {#each activeUsers.current as user (user.id)}
+      <li>{user.name}</li>
+    {/each}
+  </ul>
+</div>
+```
+
+### With Derived Values
+
+```svelte
+<script>
+import { useStore, shallow } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const stats = useStore(
+  store,
+  (state) => ({
+    users: state.users.length,
+    posts: state.posts.length,
+    comments: state.comments.length
+  }),
+  { equal: shallow }
+)
+
+const total = $derived(
+  stats.current.users + stats.current.posts + stats.current.comments
+)
+</script>
+
+<div>Total items: {total}</div>
+```
+
+### Custom Comparison
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+// Deep equality for complex nested objects
+const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
+const preferences = useStore(
+  store,
+  (state) => state.preferences,
+  { equal: deepEqual }
+)
+</script>
+```
+
+## Notes
+
+- Used as the **default equality function** in `useStore`
+- Only compares **own properties** at the first level (shallow)
+- For nested objects, only the reference is compared
+- Handles special object types: Map, Set, Date
+- Optimized for Svelte 5's runes-based reactivity
+- Prevents unnecessary `$state` updates when object contents are equivalent
+- More efficient than deep equality for most reactive scenarios

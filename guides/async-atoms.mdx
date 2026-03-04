@@ -1,0 +1,299 @@
+---
+title: Async Atoms
+description: Learn how to work with asynchronous data using async atoms in TanStack Store
+---
+
+## Overview
+
+Async atoms provide a first-class way to work with asynchronous data in TanStack Store. They automatically handle loading, success, and error states, making it easy to build robust applications that fetch and display remote data.
+
+## The createAsyncAtom API
+
+The `createAsyncAtom` function creates a read-only atom that manages asynchronous operations. It returns a special state object that represents the current status of the async operation.
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+
+const userAtom = createAsyncAtom(async () => {
+  const response = await fetch('/api/user')
+  return response.json()
+})
+```
+
+### Async State Structure
+
+Async atoms use a discriminated union type for their state, making it type-safe and easy to handle different states:
+
+```typescript
+type AsyncAtomState<TData, TError = unknown> =
+  | { status: 'pending' }
+  | { status: 'done'; data: TData }
+  | { status: 'error'; error: TError }
+```
+
+## Working with Async States
+
+### Handling Loading State
+
+When an async atom is first accessed, it starts in the `pending` state:
+
+```typescript
+const userAtom = createAsyncAtom(async () => {
+  const response = await fetch('/api/user')
+  return response.json()
+})
+
+const state = userAtom.get()
+
+if (state.status === 'pending') {
+  console.log('Loading user data...')
+}
+```
+
+### Handling Success State
+
+Once the promise resolves, the atom transitions to the `done` state with the returned data:
+
+```typescript
+if (state.status === 'done') {
+  console.log('User:', state.data)
+  // state.data is fully typed based on your async function's return type
+}
+```
+
+### Handling Error State
+
+If the promise rejects, the atom transitions to the `error` state:
+
+```typescript
+if (state.status === 'error') {
+  console.error('Failed to load user:', state.error)
+}
+```
+
+## Real-World Examples
+
+### Basic Data Fetching
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+
+interface User {
+  id: number
+  name: string
+  email: string
+}
+
+const userAtom = createAsyncAtom<User>(async () => {
+  const response = await fetch('https://api.example.com/user')
+  if (!response.ok) {
+    throw new Error('Failed to fetch user')
+  }
+  return response.json()
+})
+
+// Subscribe to state changes
+userAtom.subscribe((state) => {
+  switch (state.status) {
+    case 'pending':
+      console.log('Loading...')
+      break
+    case 'done':
+      console.log('User loaded:', state.data.name)
+      break
+    case 'error':
+      console.error('Error:', state.error)
+      break
+  }
+})
+```
+
+### Async Atom with UI Components
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+import { useStore } from '@tanstack/react-store'
+
+const postsAtom = createAsyncAtom(async () => {
+  const response = await fetch('https://api.example.com/posts')
+  return response.json()
+})
+
+function PostsList() {
+  const state = useStore(postsAtom)
+
+  if (state.status === 'pending') {
+    return <div>Loading posts...</div>
+  }
+
+  if (state.status === 'error') {
+    return <div>Error: {state.error.message}</div>
+  }
+
+  return (
+    <ul>
+      {state.data.map((post) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Combining Async Atoms with Derived Stores
+
+You can derive computed values from async atoms:
+
+```typescript
+import { createAsyncAtom, createStore } from '@tanstack/store'
+
+const userAtom = createAsyncAtom(async () => {
+  const response = await fetch('/api/user')
+  return response.json()
+})
+
+// Create a derived store that extracts just the username
+const usernameStore = createStore(() => {
+  const state = userAtom.get()
+  if (state.status === 'done') {
+    return state.data.name
+  }
+  return 'Anonymous'
+})
+
+console.log(usernameStore.state) // "Anonymous" initially
+// After async completes: "John Doe"
+```
+
+### Error Handling with Custom Error Types
+
+```typescript
+interface ApiError {
+  code: string
+  message: string
+}
+
+const dataAtom = createAsyncAtom<Data, ApiError>(async () => {
+  try {
+    const response = await fetch('/api/data')
+    if (!response.ok) {
+      const error: ApiError = await response.json()
+      throw error
+    }
+    return response.json()
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw { code: 'NETWORK_ERROR', message: 'Network request failed' }
+    }
+    throw error
+  }
+})
+
+dataAtom.subscribe((state) => {
+  if (state.status === 'error') {
+    // state.error is typed as ApiError
+    console.error(`Error ${state.error.code}: ${state.error.message}`)
+  }
+})
+```
+
+## Best Practices
+
+<Warning>
+  Async atoms are **read-only**. Once created, you cannot manually update their state. To refresh data, create a new async atom or use a regular atom with manual state management.
+</Warning>
+
+### Pattern: Loading Indicators
+
+Always provide feedback during loading states:
+
+```typescript
+const state = dataAtom.get()
+
+switch (state.status) {
+  case 'pending':
+    return <Spinner />
+  case 'error':
+    return <ErrorMessage error={state.error} />
+  case 'done':
+    return <DataDisplay data={state.data} />
+}
+```
+
+### Pattern: Retry Logic
+
+Implement retry logic by recreating the async atom:
+
+```typescript
+let retryCount = 0
+const maxRetries = 3
+
+const createDataAtom = () => createAsyncAtom(async () => {
+  try {
+    const response = await fetch('/api/data')
+    return response.json()
+  } catch (error) {
+    if (retryCount < maxRetries) {
+      retryCount++
+      throw error // Will trigger error state, allowing for retry
+    }
+    throw new Error(`Failed after ${maxRetries} attempts`)
+  }
+})
+```
+
+<Tip>
+  For more complex async state management with features like caching, refetching, and mutations, consider using [TanStack Query](https://tanstack.com/query) alongside TanStack Store.
+</Tip>
+
+## How It Works Internally
+
+Async atoms work by:
+
+1. Starting in the `pending` state when created
+2. Executing the async function immediately
+3. Using the reactive system to propagate state changes when the promise settles
+4. Automatically notifying subscribers when transitioning between states
+
+The implementation leverages TanStack Store's reactive core (based on [alien-signals](https://github.com/nicepkg/alien-signals)) to ensure efficient updates with minimal recomputations.
+
+```typescript
+// Source: packages/store/src/atom.ts:88-124
+export function createAsyncAtom<T>(
+  getValue: () => Promise<T>,
+  options?: AtomOptions<AsyncAtomState<T>>,
+): ReadonlyAtom<AsyncAtomState<T>> {
+  const ref: { current?: InternalAtom<AsyncAtomState<T>> } = {}
+  const atom = createAtom<AsyncAtomState<T>>(() => {
+    getValue().then(
+      (data) => {
+        // Update to done state
+        const internalAtom = ref.current!
+        if (internalAtom._update({ status: 'done', data })) {
+          const subs = internalAtom.subs
+          if (subs !== undefined) {
+            propagate(subs)
+            shallowPropagate(subs)
+            flush()
+          }
+        }
+      },
+      (error) => {
+        // Update to error state
+        // ...
+      },
+    )
+
+    return { status: 'pending' }
+  }, options)
+  ref.current = atom as unknown as InternalAtom<AsyncAtomState<T>>
+
+  return atom
+}
+```
+
+## Next Steps
+
+- Learn about [Type Safety](/guides/type-safety) for working with generic types
+- Explore [Performance](/guides/performance) optimization techniques
+- See the full [createAsyncAtom API](/api/core/create-async-atom)

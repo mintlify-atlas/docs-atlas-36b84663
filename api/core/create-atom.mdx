@@ -1,0 +1,293 @@
+---
+title: 'createAtom'
+description: 'Create a low-level reactive atom for fine-grained reactivity'
+---
+
+## Function Signature
+
+```typescript
+function createAtom<T>(
+  getValue: (prev?: NoInfer<T>) => T,
+  options?: AtomOptions<T>
+): ReadonlyAtom<T>
+
+function createAtom<T>(
+  initialValue: T,
+  options?: AtomOptions<T>
+): Atom<T>
+```
+
+Creates a reactive atom, which is the low-level primitive for fine-grained reactivity in TanStack Store. Atoms are similar to stores but with a more minimal API.
+
+## Parameters
+
+<ParamField path="initialValue" type="T">
+  The initial value for the atom. Creates a mutable atom that can be updated with `set()`.
+</ParamField>
+
+<ParamField path="getValue" type="(prev?: NoInfer<T>) => T">
+  A getter function that computes the atom's value. Creates a readonly atom that automatically recomputes when dependencies change.
+  
+  - `prev` - The previous computed value (optional)
+</ParamField>
+
+<ParamField path="options" type="AtomOptions<T>">
+  Optional configuration for the atom.
+  
+  <Expandable title="AtomOptions properties">
+    <ResponseField name="compare" type="(prev: T, next: T) => boolean">
+      Custom comparison function to determine if the value has changed. Defaults to `Object.is`.
+      
+      Return `true` if values are equal (no update needed), `false` if they differ (trigger update).
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+## Returns
+
+<ResponseField name="Atom<T>" type="Atom<T>">
+  Returns a mutable `Atom` instance when initialized with a value. Provides:
+  - `get()` - Get the current value
+  - `set(value)` - Set a new value
+  - `set(updater)` - Update with a function
+  - `subscribe(observer)` - Subscribe to changes
+</ResponseField>
+
+<ResponseField name="ReadonlyAtom<T>" type="ReadonlyAtom<T>">
+  Returns a readonly `ReadonlyAtom` instance when initialized with a function. Provides:
+  - `get()` - Get the current computed value
+  - `subscribe(observer)` - Subscribe to changes
+</ResponseField>
+
+## Examples
+
+### Basic Atom
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+// Create a mutable atom
+const countAtom = createAtom(0)
+
+console.log(countAtom.get()) // 0
+
+// Update with a new value
+countAtom.set(5)
+console.log(countAtom.get()) // 5
+
+// Update with a function
+countAtom.set((prev) => prev + 1)
+console.log(countAtom.get()) // 6
+```
+
+### Computed Atom
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const baseAtom = createAtom(10)
+
+// Create a computed atom that derives from baseAtom
+const doubledAtom = createAtom(() => {
+  return baseAtom.get() * 2
+})
+
+console.log(doubledAtom.get()) // 20
+
+baseAtom.set(15)
+console.log(doubledAtom.get()) // 30
+```
+
+### Custom Comparison
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+interface Point {
+  x: number
+  y: number
+}
+
+// Only update if distance changes by more than 1
+const pointAtom = createAtom<Point>(
+  { x: 0, y: 0 },
+  {
+    compare: (prev, next) => {
+      const distance = Math.sqrt(
+        Math.pow(next.x - prev.x, 2) + Math.pow(next.y - prev.y, 2)
+      )
+      return distance <= 1 // true = no update, false = update
+    }
+  }
+)
+
+let updateCount = 0
+pointAtom.subscribe(() => updateCount++)
+
+// Small change - no update
+pointAtom.set({ x: 0.5, y: 0.5 })
+console.log(updateCount) // 0
+
+// Large change - triggers update
+pointAtom.set({ x: 5, y: 5 })
+console.log(updateCount) // 1
+```
+
+### Subscribing to Atoms
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const nameAtom = createAtom('John')
+
+// Subscribe to changes
+const subscription = nameAtom.subscribe((name) => {
+  console.log('Name changed to:', name)
+})
+
+nameAtom.set('Jane')
+// Logs: Name changed to: Jane
+
+subscription.unsubscribe()
+```
+
+### Chaining Computed Atoms
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const numberAtom = createAtom(5)
+
+const squaredAtom = createAtom(() => {
+  const n = numberAtom.get()
+  return n * n
+})
+
+const sumOfSquaresAtom = createAtom(() => {
+  const squared = squaredAtom.get()
+  const n = numberAtom.get()
+  return squared + n
+})
+
+console.log(sumOfSquaresAtom.get()) // 30 (5² + 5)
+
+numberAtom.set(3)
+console.log(sumOfSquaresAtom.get()) // 12 (3² + 3)
+```
+
+### Managing Complex State
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
+const todosAtom = createAtom<Todo[]>([])
+const filterAtom = createAtom<'all' | 'active' | 'completed'>('all')
+
+// Computed atom for filtered todos
+const filteredTodosAtom = createAtom(() => {
+  const todos = todosAtom.get()
+  const filter = filterAtom.get()
+  
+  switch (filter) {
+    case 'active':
+      return todos.filter(t => !t.completed)
+    case 'completed':
+      return todos.filter(t => t.completed)
+    default:
+      return todos
+  }
+})
+
+// Add a todo
+todosAtom.set((prev) => [
+  ...prev,
+  { id: 1, text: 'Learn atoms', completed: false }
+])
+
+// Change filter
+filterAtom.set('active')
+
+console.log(filteredTodosAtom.get())
+// [{ id: 1, text: 'Learn atoms', completed: false }]
+```
+
+### Atom with Object State
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+interface User {
+  id: number
+  name: string
+  email: string
+}
+
+const userAtom = createAtom<User>({
+  id: 1,
+  name: 'John Doe',
+  email: 'john@example.com'
+})
+
+// Update a single property
+userAtom.set((prev) => ({
+  ...prev,
+  email: 'newemail@example.com'
+}))
+
+console.log(userAtom.get())
+// { id: 1, name: 'John Doe', email: 'newemail@example.com' }
+```
+
+### Using Previous Value in Computed Atoms
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const priceAtom = createAtom(100)
+
+// Track price history
+const priceHistoryAtom = createAtom((prev) => {
+  const currentPrice = priceAtom.get()
+  const history = prev || []
+  
+  return [...history, currentPrice].slice(-5) // Keep last 5 prices
+})
+
+priceAtom.set(110)
+priceAtom.set(105)
+priceAtom.set(120)
+
+console.log(priceHistoryAtom.get())
+// [100, 110, 105, 120]
+```
+
+## When to Use Atoms vs Stores
+
+<CardGroup cols={2}>
+  <Card title="Use Atoms" icon="atom">
+    - Fine-grained reactivity
+    - Building custom reactive primitives
+    - Performance-critical code
+    - Simple value containers
+  </Card>
+  
+  <Card title="Use Stores" icon="database">
+    - Application state management
+    - Higher-level abstractions
+    - When you need the `state` property
+    - Better TypeScript inference in some cases
+  </Card>
+</CardGroup>
+
+## Related APIs
+
+- [createStore](/api/core/create-store) - Higher-level store abstraction
+- [createAsyncAtom](/api/core/create-async-atom) - Atom for async operations
+- [batch](/api/core/batch) - Batch multiple atom updates
+- [flush](/api/core/flush) - Manually flush pending updates

@@ -1,97 +1,371 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: TanStack Store Documentation
+description: Framework agnostic, type-safe store with reactive framework adapters
+mode: custom
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-gradient-to-br from-[#0f1117] via-[#1a1d27] to-[#0f1117] dark:bg-gradient-to-br dark:from-[#0f1117] dark:via-[#1a1d27] dark:to-[#0f1117] py-20">
+  <div className="max-w-6xl mx-auto px-6 relative z-10">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-5xl sm:text-6xl font-bold text-white mb-6 leading-tight">
+          Framework Agnostic
+          <span className="block text-[#eab968]">Reactive Store</span>
+        </h1>
+        <p className="text-xl text-gray-300 mb-8 max-w-2xl">
+          Type-safe state management with fine-grained reactivity. Build reactive applications with atoms, derived stores, and framework adapters for React, Vue, Solid, Angular, Svelte, and Preact.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 rounded-lg bg-[#eab968] text-[#0f1117] font-semibold hover:bg-[#d4a355] transition-colors no-underline"
+          >
+            Get Started
+            <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+          <a 
+            href="/api/core/create-store" 
+            className="inline-flex items-center px-6 py-3 rounded-lg border border-white/30 bg-white/10 text-white font-semibold hover:bg-white/20 hover:border-white/50 transition-colors no-underline"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="lg:col-span-5 hidden lg:block">
+        <div className="bg-[#1a1d27] dark:bg-[#1a1d27] rounded-xl p-6 border border-[#27272a] dark:border-[#27272a] shadow-2xl">
+          <pre className="text-sm"><code className="language-typescript">{`import { createStore } from '@tanstack/store'
 
-Get your documentation site up and running in minutes.
+const countStore = createStore(0)
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+// Subscribe to changes
+countStore.subscribe(() => {
+  console.log(countStore.state)
+})
 
-## Make it yours
+// Update state
+countStore.setState(() => 1)
 
-Design a docs site that looks great and empowers your users.
+// Derived stores
+const double = createStore(() => 
+  countStore.state * 2
+)`}</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Quick Start</h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get up and running with TanStack Store in minutes
+  </p>
+  
+  <Steps>
+    <Step title="Install the package">
+      Choose your preferred package manager to install TanStack Store:
+      
+      <CodeGroup>
+      ```bash npm
+      npm install @tanstack/store
+      ```
+      ```bash yarn
+      yarn add @tanstack/store
+      ```
+      ```bash pnpm
+      pnpm add @tanstack/store
+      ```
+      </CodeGroup>
+      
+      For framework-specific adapters, install the corresponding package (e.g., `@tanstack/react-store`, `@tanstack/vue-store`).
+    </Step>
+    
+    <Step title="Create your first store">
+      Import `createStore` and initialize a store with an initial value:
+      
+      ```typescript
+      import { createStore } from '@tanstack/store'
+      
+      const countStore = createStore(0)
+      
+      console.log(countStore.state) // 0
+      ```
+      
+      Stores can hold any JavaScript value: primitives, objects, arrays, or complex nested structures.
+    </Step>
+    
+    <Step title="Subscribe to changes">
+      Subscribe to store updates to react to state changes:
+      
+      ```typescript
+      const { unsubscribe } = countStore.subscribe(() => {
+        console.log('Count changed:', countStore.state)
+      })
+      
+      countStore.setState(() => 1)  // Logs: "Count changed: 1"
+      countStore.setState(() => 2)  // Logs: "Count changed: 2"
+      
+      // Cleanup when done
+      unsubscribe()
+      ```
+    </Step>
+    
+    <Step title="Use with your framework">
+      For React, Vue, Solid, Angular, Svelte, or Preact, use the framework-specific adapter:
+      
+      <Tabs>
+        <Tab title="React">
+          ```tsx
+          import { useStore } from '@tanstack/react-store'
+          
+          function Counter() {
+            const count = useStore(countStore, (state) => state)
+            
+            return (
+              <button onClick={() => countStore.setState((c) => c + 1)}>
+                Count: {count}
+              </button>
+            )
+          }
+          ```
+        </Tab>
+        <Tab title="Vue">
+          ```vue
+          <script setup>
+          import { useStore } from '@tanstack/vue-store'
+          
+          const count = useStore(countStore, (state) => state)
+          </script>
+          
+          <template>
+            <button @click="countStore.setState((c) => c + 1)">
+              Count: {{ count }}
+            </button>
+          </template>
+          ```
+        </Tab>
+        <Tab title="Solid">
+          ```tsx
+          import { useStore } from '@tanstack/solid-store'
+          
+          function Counter() {
+            const count = useStore(countStore, (state) => state)
+            
+            return (
+              <button onClick={() => countStore.setState((c) => c + 1)}>
+                Count: {count()}
+              </button>
+            )
+          }
+          ```
+        </Tab>
+      </Tabs>
+      
+      See the [Framework Guides](/frameworks/react) for complete integration examples.
+    </Step>
+  </Steps>
+</div>
 
-## Create beautiful pages
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Explore by Topic</h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Learn core concepts and integrate with your favorite framework
+  </p>
+  
+  <CardGroup cols={3}>
+    <Card title="Stores" icon="database" href="/concepts/stores">
+      Create reactive stores to manage application state
+    </Card>
+    <Card title="Atoms" icon="atom" href="/concepts/atoms">
+      Build fine-grained reactive primitives with atoms
+    </Card>
+    <Card title="Derived Stores" icon="arrow-trend-up" href="/concepts/derived-stores">
+      Compute values automatically from other stores
+    </Card>
+    <Card title="Subscriptions" icon="bell" href="/concepts/subscriptions">
+      React to state changes with subscriptions
+    </Card>
+    <Card title="Batching" icon="layer-group" href="/concepts/batching">
+      Optimize performance with batched updates
+    </Card>
+    <Card title="Async Atoms" icon="clock" href="/guides/async-atoms">
+      Handle asynchronous data with async atoms
+    </Card>
+  </CardGroup>
+</div>
 
-Everything you need to create world-class documentation.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Framework Support</h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    First-class adapters for all major JavaScript frameworks
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <a href="/frameworks/react" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#eab968] dark:hover:border-[#eab968] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">React</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Use TanStack Store with React hooks
+        </p>
+        <span className="text-sm text-[#eab968] group-hover:text-[#d4a355] flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+    
+    <a href="/frameworks/vue" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#eab968] dark:hover:border-[#eab968] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Vue</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Integrate with Vue's composition API
+        </p>
+        <span className="text-sm text-[#eab968] group-hover:text-[#d4a355] flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+    
+    <a href="/frameworks/solid" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#eab968] dark:hover:border-[#eab968] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Solid</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Leverage Solid's fine-grained reactivity
+        </p>
+        <span className="text-sm text-[#eab968] group-hover:text-[#d4a355] flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+    
+    <a href="/frameworks/angular" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#eab968] dark:hover:border-[#eab968] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Angular</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Use dependency injection with Angular
+        </p>
+        <span className="text-sm text-[#eab968] group-hover:text-[#d4a355] flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+    
+    <a href="/frameworks/svelte" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#eab968] dark:hover:border-[#eab968] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Svelte</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Integrate with Svelte stores seamlessly
+        </p>
+        <span className="text-sm text-[#eab968] group-hover:text-[#d4a355] flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+    
+    <a href="/frameworks/preact" className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#eab968] dark:hover:border-[#eab968] overflow-hidden no-underline transition-colors">
+      <div className="p-6">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2">Preact</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Lightweight state management for Preact
+        </p>
+        <span className="text-sm text-[#eab968] group-hover:text-[#d4a355] flex items-center">
+          Learn more
+          <svg className="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+  </div>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Key Features</h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Built for performance, developer experience, and flexibility
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="p-6 rounded-xl bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a]">
+      <div className="w-10 h-10 rounded-lg bg-[#eab968]/10 dark:bg-[#eab968]/10 flex items-center justify-center mb-4">
+        <svg className="w-5 h-5 text-[#eab968]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Fine-Grained Reactivity</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Update only what changes with fine-grained subscriptions. No unnecessary re-renders or computations.
+      </p>
+    </div>
+    
+    <div className="p-6 rounded-xl bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a]">
+      <div className="w-10 h-10 rounded-lg bg-[#eab968]/10 dark:bg-[#eab968]/10 flex items-center justify-center mb-4">
+        <svg className="w-5 h-5 text-[#eab968]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Type-Safe</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Full TypeScript support with inference. Catch errors at compile time, not runtime.
+      </p>
+    </div>
+    
+    <div className="p-6 rounded-xl bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a]">
+      <div className="w-10 h-10 rounded-lg bg-[#eab968]/10 dark:bg-[#eab968]/10 flex items-center justify-center mb-4">
+        <svg className="w-5 h-5 text-[#eab968]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Framework Agnostic</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Use vanilla JS or any framework. Adapters for React, Vue, Solid, Angular, Svelte, and Preact included.
+      </p>
+    </div>
+    
+    <div className="p-6 rounded-xl bg-gray-50 dark:bg-[#1a1d27] border border-gray-200 dark:border-[#27272a]">
+      <div className="w-10 h-10 rounded-lg bg-[#eab968]/10 dark:bg-[#eab968]/10 flex items-center justify-center mb-4">
+        <svg className="w-5 h-5 text-[#eab968]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+        </svg>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Lightweight</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Minimal bundle size with zero dependencies. Only pay for what you use.
+      </p>
+    </div>
+  </div>
+</div>
 
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl bg-gradient-to-br from-[#eab968] to-[#d4a355] p-8 text-center">
+    <h2 className="text-3xl font-bold text-[#0f1117] mb-4">Ready to build reactive applications?</h2>
+    <p className="text-lg text-[#0f1117]/80 mb-6 max-w-2xl mx-auto">
+      Get started with TanStack Store in minutes and experience the power of fine-grained reactivity.
+    </p>
+    <a 
+      href="/quickstart" 
+      className="inline-flex items-center px-6 py-3 rounded-lg bg-[#0f1117] text-white font-semibold hover:bg-[#1a1d27] transition-colors no-underline"
+    >
+      Get Started
+      <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+      </svg>
+    </a>
+  </div>
+</div>

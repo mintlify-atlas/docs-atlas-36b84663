@@ -1,0 +1,510 @@
+---
+title: "Subscriptions"
+description: "Learn how to react to state changes in TanStack Store with subscriptions"
+---
+
+## What are Subscriptions?
+
+Subscriptions allow you to react to changes in stores and atoms. When you subscribe to a store or atom, your callback function is called whenever the value changes, enabling you to synchronize external systems, update UI, trigger side effects, and more.
+
+## Basic Subscriptions
+
+### Subscribe to a Store
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const countStore = createStore(0)
+
+const subscription = countStore.subscribe((value) => {
+  console.log('Count changed to:', value)
+})
+
+// Update the store
+countStore.setState(() => 1) // Logs: "Count changed to: 1"
+countStore.setState((prev) => prev + 1) // Logs: "Count changed to: 2"
+
+// Clean up when done
+subscription.unsubscribe()
+```
+
+### Subscribe to an Atom
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const countAtom = createAtom(0)
+
+const subscription = countAtom.subscribe((value) => {
+  console.log('Count changed to:', value)
+})
+
+countAtom.set(1) // Logs: "Count changed to: 1"
+countAtom.set((prev) => prev + 1) // Logs: "Count changed to: 2"
+
+subscription.unsubscribe()
+```
+
+## Subscription API
+
+### Function Signature
+
+```typescript
+// Simple callback
+function subscribe(callback: (value: T) => void): Subscription
+
+// Observer object
+function subscribe(observer: Observer<T>): Subscription
+
+interface Observer<T> {
+  next?: (value: T) => void
+  error?: (err: unknown) => void
+  complete?: () => void
+}
+
+interface Subscription {
+  unsubscribe: () => void
+}
+```
+
+### Using an Observer Object
+
+For more control, you can pass an observer object with `next`, `error`, and `complete` handlers:
+
+```typescript
+const subscription = store.subscribe({
+  next: (value) => {
+    console.log('New value:', value)
+  },
+  error: (err) => {
+    console.error('Error:', err)
+  },
+  complete: () => {
+    console.log('Subscription complete')
+  },
+})
+```
+
+<Note>
+The `error` and `complete` callbacks are currently not used by the core library but are provided for RxJS interoperability.
+</Note>
+
+## When Subscriptions Fire
+
+Subscriptions fire when:
+
+1. The store/atom value changes (passes comparison check)
+2. For derived stores/atoms, when any dependency changes and the computed value is different
+
+<Warning>
+Subscription callbacks are **not** called immediately upon subscription. Only subsequent changes trigger the callback.
+</Warning>
+
+```typescript
+const store = createStore(42)
+
+store.subscribe((value) => {
+  console.log('Value:', value) // Not called immediately
+})
+
+store.setState(() => 100) // Logs: "Value: 100"
+```
+
+## Unsubscribing
+
+Always unsubscribe when you're done to prevent memory leaks:
+
+```typescript
+const subscription = store.subscribe((value) => {
+  console.log(value)
+})
+
+// Later, when you're done
+subscription.unsubscribe()
+```
+
+### Automatic Cleanup Pattern
+
+```typescript
+function setupComponent() {
+  const subscription = store.subscribe((value) => {
+    updateUI(value)
+  })
+
+  // Return cleanup function
+  return () => {
+    subscription.unsubscribe()
+  }
+}
+
+// Usage
+const cleanup = setupComponent()
+
+// When component unmounts
+cleanup()
+```
+
+## Multiple Subscriptions
+
+You can have multiple subscriptions to the same store or atom:
+
+```typescript
+const store = createStore(0)
+
+const sub1 = store.subscribe((value) => {
+  console.log('Subscriber 1:', value)
+})
+
+const sub2 = store.subscribe((value) => {
+  console.log('Subscriber 2:', value)
+})
+
+store.setState(() => 1)
+// Logs:
+// "Subscriber 1: 1"
+// "Subscriber 2: 1"
+
+// Unsubscribe independently
+sub1.unsubscribe()
+
+store.setState(() => 2)
+// Logs:
+// "Subscriber 2: 2"
+// (sub1 no longer called)
+```
+
+## Subscribing to Derived Stores
+
+You can subscribe to derived stores just like regular stores:
+
+```typescript
+const countStore = createStore(0)
+const doubledStore = createStore(() => countStore.state * 2)
+
+doubledStore.subscribe((value) => {
+  console.log('Doubled value:', value)
+})
+
+countStore.setState(() => 5) // Logs: "Doubled value: 10"
+countStore.setState(() => 7) // Logs: "Doubled value: 14"
+```
+
+## Practical Examples
+
+### Sync to LocalStorage
+
+```typescript
+interface UserSettings {
+  theme: 'light' | 'dark'
+  language: string
+  notifications: boolean
+}
+
+const settingsStore = createStore<UserSettings>({
+  theme: 'light',
+  language: 'en',
+  notifications: true,
+})
+
+// Subscribe to persist changes
+settingsStore.subscribe((settings) => {
+  localStorage.setItem('user-settings', JSON.stringify(settings))
+})
+
+// Update settings
+settingsStore.setState((prev) => ({
+  ...prev,
+  theme: 'dark',
+})) // Automatically saved to localStorage
+```
+
+### Update Document Title
+
+```typescript
+const unreadCountStore = createStore(0)
+const pageTitleStore = createStore('My App')
+
+// Update document title when either changes
+const titleStore = createStore(() => {
+  const count = unreadCountStore.state
+  const title = pageTitleStore.state
+  return count > 0 ? `(${count}) ${title}` : title
+})
+
+titleStore.subscribe((title) => {
+  document.title = title
+})
+
+unreadCountStore.setState(() => 5) // Title becomes "(5) My App"
+```
+
+### Log State Changes
+
+```typescript
+function createLoggedStore<T>(initialValue: T, name: string) {
+  const store = createStore(initialValue)
+
+  store.subscribe((value) => {
+    console.log(`[${name}] changed:`, value)
+  })
+
+  return store
+}
+
+const userStore = createLoggedStore({ name: 'Alice' }, 'UserStore')
+
+userStore.setState(() => ({ name: 'Bob' }))
+// Logs: "[UserStore] changed: { name: 'Bob' }"
+```
+
+### Debounced Subscription
+
+```typescript
+function debounce<T>(fn: (value: T) => void, delay: number) {
+  let timeoutId: number | undefined
+  
+  return (value: T) => {
+    clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => fn(value), delay)
+  }
+}
+
+const searchQueryStore = createStore('')
+
+// Debounced search - only executes after user stops typing
+const debouncedSearch = debounce((query: string) => {
+  console.log('Searching for:', query)
+  performSearch(query)
+}, 500)
+
+searchQueryStore.subscribe(debouncedSearch)
+```
+
+### React to Specific Changes
+
+```typescript
+interface Product {
+  id: string
+  name: string
+  price: number
+  inStock: boolean
+}
+
+const productStore = createStore<Product>({
+  id: '1',
+  name: 'Widget',
+  price: 10,
+  inStock: true,
+})
+
+// Only react to price changes
+let previousPrice = productStore.state.price
+
+productStore.subscribe((product) => {
+  if (product.price !== previousPrice) {
+    console.log('Price changed from', previousPrice, 'to', product.price)
+    previousPrice = product.price
+  }
+})
+```
+
+### Analytics Tracking
+
+```typescript
+const pageViewStore = createStore(0)
+const userActionsStore = createStore<Array<{ type: string; timestamp: number }>>([])
+
+// Track page views
+pageViewStore.subscribe((count) => {
+  analytics.track('page_view', { count })
+})
+
+// Track user actions
+userActionsStore.subscribe((actions) => {
+  const latestAction = actions[actions.length - 1]
+  if (latestAction) {
+    analytics.track('user_action', {
+      type: latestAction.type,
+      timestamp: latestAction.timestamp,
+    })
+  }
+})
+```
+
+### Sync Multiple Stores
+
+```typescript
+const celsiusStore = createStore(0)
+const fahrenheitStore = createStore(32)
+
+let updating = false
+
+// Sync Celsius to Fahrenheit
+celsiusStore.subscribe((celsius) => {
+  if (!updating) {
+    updating = true
+    fahrenheitStore.setState(() => celsius * 9/5 + 32)
+    updating = false
+  }
+})
+
+// Sync Fahrenheit to Celsius
+fahrenheitStore.subscribe((fahrenheit) => {
+  if (!updating) {
+    updating = true
+    celsiusStore.setState(() => (fahrenheit - 32) * 5/9)
+    updating = false
+  }
+})
+```
+
+### Form Validation Feedback
+
+```typescript
+const emailStore = createStore('')
+const emailErrorStore = createStore('')
+
+const isEmailValidStore = createStore(() => {
+  const email = emailStore.state
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+})
+
+// Update error message based on validation
+isEmailValidStore.subscribe((isValid) => {
+  const email = emailStore.state
+  
+  if (email && !isValid) {
+    emailErrorStore.setState(() => 'Please enter a valid email')
+  } else {
+    emailErrorStore.setState(() => '')
+  }
+})
+
+// Also clear error when email changes
+emailStore.subscribe(() => {
+  emailErrorStore.setState(() => '')
+})
+```
+
+## Subscriptions vs Derived Stores
+
+When should you use a subscription versus a derived store?
+
+<CardGroup cols={2}>
+
+<Card title="Use Subscriptions For" icon="bell">
+  - Side effects (API calls, logging)
+  - Syncing to external systems
+  - Imperative updates (DOM, localStorage)
+  - One-way data flow triggers
+</Card>
+
+<Card title="Use Derived Stores For" icon="share-nodes">
+  - Pure computations
+  - Derived state
+  - Data transformations
+  - Reactive data flow
+</Card>
+
+</CardGroup>
+
+```typescript
+// Use derived store for pure computation
+const doubledStore = createStore(() => countStore.state * 2)
+
+// Use subscription for side effects
+countStore.subscribe((count) => {
+  console.log('Count changed:', count)
+  sendAnalytics({ event: 'count_changed', value: count })
+})
+```
+
+## Best Practices
+
+<AccordionGroup>
+
+<Accordion title="Always Unsubscribe">
+Preventing memory leaks is critical. Always call `unsubscribe()` when you're done:
+
+```typescript
+// Good
+const cleanup = () => {
+  subscription.unsubscribe()
+}
+
+// In React
+useEffect(() => {
+  const sub = store.subscribe(updateUI)
+  return () => sub.unsubscribe()
+}, [])
+```
+</Accordion>
+
+<Accordion title="Avoid Infinite Loops">
+Don't update the same store inside its own subscription:
+
+```typescript
+// Bad - infinite loop
+store.subscribe((value) => {
+  store.setState(() => value + 1) // DON'T DO THIS
+})
+
+// Good - use derived stores instead
+const incrementedStore = createStore(() => store.state + 1)
+```
+</Accordion>
+
+<Accordion title="Use Guards for Conditional Updates">
+If you must update a store in a subscription, use guards:
+
+```typescript
+let isUpdating = false
+
+store.subscribe((value) => {
+  if (!isUpdating && someCondition) {
+    isUpdating = true
+    otherStore.setState(() => transform(value))
+    isUpdating = false
+  }
+})
+```
+</Accordion>
+
+<Accordion title="Keep Callbacks Fast">
+Subscription callbacks should be fast. For expensive operations, debounce or use workers:
+
+```typescript
+// Good - debounced
+const debouncedUpdate = debounce(expensiveOperation, 300)
+store.subscribe(debouncedUpdate)
+
+// Good - async
+store.subscribe(async (value) => {
+  await performAsyncOperation(value)
+})
+```
+</Accordion>
+
+</AccordionGroup>
+
+## Related Concepts
+
+<CardGroup cols={2}>
+
+<Card title="Stores" icon="database" href="/concepts/stores">
+  Learn about the store primitive
+</Card>
+
+<Card title="Atoms" icon="atom" href="/concepts/atoms">
+  Lower-level reactive primitives
+</Card>
+
+<Card title="Derived Stores" icon="share-nodes" href="/concepts/derived-stores">
+  Create computed state
+</Card>
+
+<Card title="Batching" icon="layer-group" href="/concepts/batching">
+  Batch updates to reduce subscription calls
+</Card>
+
+</CardGroup>

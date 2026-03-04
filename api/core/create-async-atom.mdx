@@ -1,0 +1,340 @@
+---
+title: 'createAsyncAtom'
+description: 'Create a reactive atom that handles asynchronous operations'
+---
+
+## Function Signature
+
+```typescript
+function createAsyncAtom<T>(
+  getValue: () => Promise<T>,
+  options?: AtomOptions<AsyncAtomState<T>>
+): ReadonlyAtom<AsyncAtomState<T>>
+
+type AsyncAtomState<TData, TError = unknown> =
+  | { status: 'pending' }
+  | { status: 'done'; data: TData }
+  | { status: 'error'; error: TError }
+```
+
+Creates a reactive atom that manages asynchronous operations. The atom automatically tracks the state of the promise (pending, done, or error) and updates subscribers when the promise resolves or rejects.
+
+## Parameters
+
+<ParamField path="getValue" type="() => Promise<T>" required>
+  An async function that returns a Promise. This function is called immediately when the atom is created and whenever the atom is recomputed (if it depends on other atoms).
+</ParamField>
+
+<ParamField path="options" type="AtomOptions<AsyncAtomState<T>>">
+  Optional configuration for the atom.
+  
+  <Expandable title="AtomOptions properties">
+    <ResponseField name="compare" type="(prev: AsyncAtomState<T>, next: AsyncAtomState<T>) => boolean">
+      Custom comparison function to determine if the state has changed. Defaults to `Object.is`.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+## Return Type
+
+<ResponseField name="ReadonlyAtom<AsyncAtomState<T>>" type="ReadonlyAtom<AsyncAtomState<T>>">
+  Returns a readonly atom containing the async operation state. The state is a discriminated union:
+  
+  <Expandable title="AsyncAtomState<TData, TError>">
+    <ResponseField name="status" type="'pending' | 'done' | 'error'" required>
+      The current status of the async operation.
+    </ResponseField>
+    
+    <ResponseField name="data" type="TData">
+      Available when `status === 'done'`. Contains the resolved value.
+    </ResponseField>
+    
+    <ResponseField name="error" type="TError">
+      Available when `status === 'error'`. Contains the rejection reason.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Examples
+
+### Basic Async Atom
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+
+const userAtom = createAsyncAtom(async () => {
+  const response = await fetch('https://api.example.com/user/1')
+  return response.json()
+})
+
+// Initially pending
+console.log(userAtom.get())
+// { status: 'pending' }
+
+// After promise resolves
+setTimeout(() => {
+  const state = userAtom.get()
+  if (state.status === 'done') {
+    console.log(state.data)
+    // { id: 1, name: 'John Doe', ... }
+  }
+}, 1000)
+```
+
+### Handling All States
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+
+const dataAtom = createAsyncAtom(async () => {
+  const response = await fetch('https://api.example.com/data')
+  if (!response.ok) {
+    throw new Error('Failed to fetch data')
+  }
+  return response.json()
+})
+
+function renderData() {
+  const state = dataAtom.get()
+  
+  switch (state.status) {
+    case 'pending':
+      return 'Loading...'
+    
+    case 'done':
+      return `Data: ${JSON.stringify(state.data)}`
+    
+    case 'error':
+      return `Error: ${state.error.message}`
+  }
+}
+```
+
+### Subscribing to Async State Changes
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+
+const todosAtom = createAsyncAtom(async () => {
+  const response = await fetch('https://api.example.com/todos')
+  return response.json()
+})
+
+// Subscribe to state changes
+const subscription = todosAtom.subscribe((state) => {
+  if (state.status === 'pending') {
+    console.log('Fetching todos...')
+  } else if (state.status === 'done') {
+    console.log('Todos loaded:', state.data)
+  } else if (state.status === 'error') {
+    console.error('Failed to load todos:', state.error)
+  }
+})
+
+// Unsubscribe when done
+subscription.unsubscribe()
+```
+
+### Reactive Async Atoms
+
+```typescript
+import { createAtom, createAsyncAtom } from '@tanstack/store'
+
+const userIdAtom = createAtom(1)
+
+// Async atom that refetches when userIdAtom changes
+const userAtom = createAsyncAtom(async () => {
+  const userId = userIdAtom.get()
+  const response = await fetch(`https://api.example.com/users/${userId}`)
+  return response.json()
+})
+
+// Initially fetches user 1
+console.log(userAtom.get().status) // 'pending'
+
+// Change user ID - automatically refetches
+userIdAtom.set(2)
+
+// Now fetching user 2
+console.log(userAtom.get().status) // 'pending'
+```
+
+### Error Handling
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+
+interface User {
+  id: number
+  name: string
+}
+
+const userAtom = createAsyncAtom<User>(async () => {
+  const response = await fetch('https://api.example.com/user')
+  
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+  }
+  
+  const data = await response.json()
+  
+  if (!data.id || !data.name) {
+    throw new Error('Invalid user data')
+  }
+  
+  return data
+})
+
+function displayUser() {
+  const state = userAtom.get()
+  
+  if (state.status === 'error') {
+    console.error('Error loading user:', state.error)
+    return null
+  }
+  
+  if (state.status === 'pending') {
+    return 'Loading...'
+  }
+  
+  return state.data.name
+}
+```
+
+### TypeScript Error Types
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+import type { ReadonlyAtom } from '@tanstack/store'
+
+interface ApiError {
+  code: string
+  message: string
+}
+
+type AsyncAtomState<TData, TError = unknown> =
+  | { status: 'pending' }
+  | { status: 'done'; data: TData }
+  | { status: 'error'; error: TError }
+
+const dataAtom: ReadonlyAtom<AsyncAtomState<string, ApiError>> = 
+  createAsyncAtom(async () => {
+    try {
+      const response = await fetch('https://api.example.com/data')
+      return await response.text()
+    } catch (err) {
+      throw {
+        code: 'FETCH_ERROR',
+        message: err instanceof Error ? err.message : 'Unknown error'
+      } as ApiError
+    }
+  })
+
+const state = dataAtom.get()
+if (state.status === 'error') {
+  // TypeScript knows error is ApiError
+  console.log(state.error.code, state.error.message)
+}
+```
+
+### Combining Multiple Async Atoms
+
+```typescript
+import { createAsyncAtom, createAtom } from '@tanstack/store'
+
+const userAtom = createAsyncAtom(async () => {
+  const response = await fetch('https://api.example.com/user')
+  return response.json()
+})
+
+const postsAtom = createAsyncAtom(async () => {
+  const response = await fetch('https://api.example.com/posts')
+  return response.json()
+})
+
+// Computed atom that combines both async atoms
+const combinedAtom = createAtom(() => {
+  const userState = userAtom.get()
+  const postsState = postsAtom.get()
+  
+  if (userState.status === 'pending' || postsState.status === 'pending') {
+    return { status: 'pending' as const }
+  }
+  
+  if (userState.status === 'error') {
+    return { status: 'error' as const, error: userState.error }
+  }
+  
+  if (postsState.status === 'error') {
+    return { status: 'error' as const, error: postsState.error }
+  }
+  
+  return {
+    status: 'done' as const,
+    data: {
+      user: userState.data,
+      posts: postsState.data
+    }
+  }
+})
+```
+
+### Retry Logic
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+
+async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3
+): Promise<T> {
+  let lastError: Error
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error as Error
+      if (i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)))
+      }
+    }
+  }
+  
+  throw lastError!
+}
+
+const dataAtom = createAsyncAtom(async () => {
+  return fetchWithRetry(async () => {
+    const response = await fetch('https://api.example.com/data')
+    if (!response.ok) throw new Error('Fetch failed')
+    return response.json()
+  })
+})
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Automatic State Tracking" icon="signal-stream">
+    Tracks pending, success, and error states automatically without manual state management.
+  </Card>
+  
+  <Card title="Type-Safe States" icon="shield-check">
+    TypeScript discriminated unions ensure type safety when accessing data or error properties.
+  </Card>
+  
+  <Card title="Reactive Dependencies" icon="link">
+    Automatically refetches when dependent atoms change, keeping async data fresh.
+  </Card>
+  
+  <Card title="Observable Updates" icon="bell">
+    Subscribers are notified when the async operation completes or fails.
+  </Card>
+</CardGroup>
+
+## Related APIs
+
+- [createAtom](/api/core/create-atom) - Base atom primitive
+- [createStore](/api/core/create-store) - Higher-level store abstraction
+- [flush](/api/core/flush) - Manually flush pending updates

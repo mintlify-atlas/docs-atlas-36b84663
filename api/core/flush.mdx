@@ -1,0 +1,306 @@
+---
+title: 'flush'
+description: 'Manually trigger pending store/atom update notifications'
+---
+
+## Function Signature
+
+```typescript
+function flush(): void
+```
+
+Manually flushes all pending subscriber notifications. This is typically used in advanced scenarios where you need fine-grained control over when updates are propagated to subscribers.
+
+## Parameters
+
+The function takes no parameters.
+
+## Returns
+
+The function returns `void`.
+
+## How It Works
+
+In TanStack Store, when you update an atom or store, notifications to subscribers are normally queued and flushed automatically. The `flush()` function allows you to manually trigger the processing of this notification queue.
+
+Key behaviors:
+
+- If currently inside a `batch()`, `flush()` does nothing (waits for batch to complete)
+- Otherwise, processes all queued effect notifications immediately
+- Clears the notification queue after processing
+
+<Note>
+  In most applications, you won't need to call `flush()` directly. The store system automatically flushes notifications at appropriate times. This is an advanced API for special use cases.
+</Note>
+
+## Examples
+
+### Understanding Automatic Flushing
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const countAtom = createAtom(0)
+
+let notificationCount = 0
+countAtom.subscribe(() => {
+  notificationCount++
+  console.log('Count:', countAtom.get())
+})
+
+// Updates are flushed automatically
+countAtom.set(1)
+console.log('Notifications:', notificationCount) // 1
+
+countAtom.set(2)
+console.log('Notifications:', notificationCount) // 2
+
+// No need to call flush() - it happens automatically
+```
+
+### Manual Flushing in Tests
+
+```typescript
+import { createAtom, flush } from '@tanstack/store'
+
+const valueAtom = createAtom(0)
+const derivedAtom = createAtom(() => valueAtom.get() * 2)
+
+let callCount = 0
+derivedAtom.subscribe(() => callCount++)
+
+// In some testing scenarios, you might want explicit control
+valueAtom.set(5)
+
+// Ensure all updates have propagated before assertions
+flush()
+
+expect(derivedAtom.get()).toBe(10)
+expect(callCount).toBe(1)
+```
+
+### Flush Behavior with Batching
+
+```typescript
+import { createStore, batch, flush } from '@tanstack/store'
+
+const store1 = createStore(0)
+const store2 = createStore(0)
+
+const derived = createStore(() => store1.state + store2.state)
+
+let notifications = 0
+derived.subscribe(() => notifications++)
+
+batch(() => {
+  store1.setState((prev) => prev + 1)
+  
+  // flush() inside batch does nothing
+  flush()
+  console.log('Notifications during batch:', notifications) // 0
+  
+  store2.setState((prev) => prev + 1)
+})
+
+// Automatically flushed after batch completes
+console.log('Notifications after batch:', notifications) // 1
+```
+
+### Custom Update Scheduling
+
+```typescript
+import { createAtom, flush } from '@tanstack/store'
+
+const dataAtom = createAtom<any[]>([])
+
+// Accumulate updates and flush on animation frame
+let hasPendingFlush = false
+
+function scheduleFlush() {
+  if (!hasPendingFlush) {
+    hasPendingFlush = true
+    requestAnimationFrame(() => {
+      flush()
+      hasPendingFlush = false
+    })
+  }
+}
+
+// Note: This is a simplified example
+// Real implementation would need to intercept the update mechanism
+dataAtom.subscribe(() => {
+  console.log('Data updated')
+})
+```
+
+### Testing Synchronous Updates
+
+```typescript
+import { createAtom, flush } from '@tanstack/store'
+
+function testAtomUpdates() {
+  const atom = createAtom(0)
+  const values: number[] = []
+  
+  atom.subscribe((value) => {
+    values.push(value)
+  })
+  
+  atom.set(1)
+  atom.set(2)
+  atom.set(3)
+  
+  // Ensure all updates are processed
+  flush()
+  
+  console.log('Captured values:', values) // [1, 2, 3]
+  
+  return values.length === 3
+}
+```
+
+### Debugging Update Timing
+
+```typescript
+import { createStore, flush } from '@tanstack/store'
+
+const debugStore = createStore(0)
+
+let updateLog: string[] = []
+
+debugStore.subscribe((value) => {
+  updateLog.push(`Notified: ${value}`)
+})
+
+function debugUpdate(newValue: number) {
+  updateLog.push(`Before update: ${newValue}`)
+  
+  debugStore.setState(() => newValue)
+  
+  updateLog.push('After update (before flush)')
+  
+  flush()
+  
+  updateLog.push('After flush')
+}
+
+debugUpdate(42)
+
+console.log(updateLog.join('\n'))
+// Before update: 42
+// After update (before flush)
+// Notified: 42
+// After flush
+```
+
+### Integration with External Systems
+
+```typescript
+import { createAtom, flush } from '@tanstack/store'
+
+const stateAtom = createAtom({ count: 0 })
+
+// Sync with external state management
+function syncWithExternal(externalState: any) {
+  // Update our atom
+  stateAtom.set(externalState)
+  
+  // Ensure sync is complete before continuing
+  flush()
+  
+  // Now safe to read derived state
+  console.log('Synced:', stateAtom.get())
+}
+```
+
+## When to Use flush()
+
+<CardGroup cols={2}>
+  <Card title="Testing" icon="flask">
+    Ensure all updates have propagated before making assertions in tests.
+  </Card>
+  
+  <Card title="Debugging" icon="bug">
+    Understand exactly when notifications occur during complex update sequences.
+  </Card>
+  
+  <Card title="Integration" icon="plug">
+    Coordinate with external systems that need guaranteed update timing.
+  </Card>
+  
+  <Card title="Custom Scheduling" icon="clock">
+    Build custom update scheduling mechanisms (advanced use case).
+  </Card>
+</CardGroup>
+
+## When NOT to Use flush()
+
+<Warning>
+  **Avoid using flush() in these scenarios:**
+  
+  - **Normal application code** - Updates flush automatically
+  - **Inside batch()** - Has no effect; wait for batch to complete
+  - **Performance optimization** - Calling flush() unnecessarily can hurt performance
+  - **As a "fix" for timing issues** - Usually indicates an architectural problem
+</Warning>
+
+## Common Misconceptions
+
+### Misconception: Need to flush after every update
+
+```typescript
+// ❌ Not necessary - auto-flushed
+import { createStore, flush } from '@tanstack/store'
+
+const store = createStore(0)
+store.setState((prev) => prev + 1)
+flush() // Unnecessary!
+```
+
+### Misconception: flush() forces immediate update
+
+```typescript
+// ❌ flush() doesn't make updates synchronous during batch
+import { batch, createStore, flush } from '@tanstack/store'
+
+const store = createStore(0)
+
+batch(() => {
+  store.setState(() => 1)
+  flush() // Does nothing here
+  console.log(store.state) // Still 1, but subscribers not notified yet
+})
+// Subscribers notified here, after batch
+```
+
+## Implementation Details
+
+From the source code (`atom.ts:69-81`):
+
+```typescript
+export function flush(): void {
+  if (getBatchDepth() > 0) {
+    return // Inside batch - do nothing
+  }
+  
+  while (notifyIndex < queuedEffectsLength) {
+    const effect = queuedEffects[notifyIndex]!
+    queuedEffects[notifyIndex++] = undefined
+    effect.notify()
+  }
+  
+  notifyIndex = 0
+  queuedEffectsLength = 0
+}
+```
+
+Key points:
+- Respects batch depth
+- Processes queued effects in order
+- Clears the queue when complete
+
+## Related APIs
+
+- [batch](/api/core/batch) - Batch multiple updates together
+- [createAtom](/api/core/create-atom) - Create reactive atoms
+- [createStore](/api/core/create-store) - Create reactive stores

@@ -1,0 +1,141 @@
+---
+title: shallow
+description: Shallow equality comparison function for Vue Store
+---
+
+## Reference
+
+### `shallow`
+
+```ts
+function shallow<T>(objA: T, objB: T): boolean
+```
+
+A utility function that performs shallow equality comparison between two values. Used as the default equality function in `useStore` to prevent unnecessary reactivity updates.
+
+<ParamField path="objA" type="T">
+  The first value to compare.
+</ParamField>
+
+<ParamField path="objB" type="T">
+  The second value to compare.
+</ParamField>
+
+### Returns
+
+<ResponseField name="boolean" type="boolean">
+  `true` if the values are shallowly equal, `false` otherwise.
+</ResponseField>
+
+## Comparison Behavior
+
+The `shallow` function handles various data types:
+
+- **Reference equality**: Returns `true` if `Object.is(objA, objB)`
+- **Primitives/null**: Returns `false` if either value is not an object
+- **Map**: Compares size and all entries using `Object.is`
+- **Set**: Compares size and all values for presence
+- **Date**: Compares timestamps using `getTime()`
+- **Objects**: Compares own properties using `Object.is`
+
+## Usage
+
+### Default Behavior
+
+```vue
+<script setup>
+import { useStore } from '@tanstack/vue-store'
+import { store } from './store'
+
+// shallow is used by default
+const user = useStore(store, (state) => state.user)
+</script>
+```
+
+### Explicit Usage
+
+```vue
+<script setup>
+import { useStore, shallow } from '@tanstack/vue-store'
+import { store } from './store'
+
+const user = useStore(
+  store,
+  (state) => ({
+    name: state.name,
+    email: state.email
+  }),
+  { equal: shallow }
+)
+</script>
+```
+
+### Custom Comparison
+
+```vue
+<script setup>
+import { useStore } from '@tanstack/vue-store'
+import { store } from './store'
+
+// Use strict reference equality instead of shallow
+const items = useStore(
+  store,
+  (state) => state.items,
+  { equal: (a, b) => a === b }
+)
+</script>
+```
+
+### Selecting Array Slices
+
+```vue
+<script setup>
+import { useStore, shallow } from '@tanstack/vue-store'
+import { store } from './store'
+
+// Shallow comparison prevents updates when array content is the same
+const activeUsers = useStore(
+  store,
+  (state) => state.users.filter(u => u.active),
+  { equal: shallow }
+)
+</script>
+
+<template>
+  <ul>
+    <li v-for="user in activeUsers" :key="user.id">
+      {{ user.name }}
+    </li>
+  </ul>
+</template>
+```
+
+### With Nested Objects
+
+```vue
+<script setup>
+import { useStore, shallow } from '@tanstack/vue-store'
+import { store } from './store'
+
+// Shallow compare only checks first-level properties
+const config = useStore(
+  store,
+  (state) => ({
+    theme: state.config.theme,
+    language: state.config.language,
+    // nested object compared by reference only
+    advanced: state.config.advanced
+  }),
+  { equal: shallow }
+)
+</script>
+```
+
+## Notes
+
+- Used as the **default equality function** in `useStore`
+- Only compares **own properties** at the first level (shallow)
+- For nested objects, only the reference is compared
+- Handles special object types: Map, Set, Date
+- Works with Vue's reactivity system via `toRaw` unwrapping
+- More efficient than deep equality for most use cases

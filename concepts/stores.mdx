@@ -1,0 +1,284 @@
+---
+title: "Stores"
+description: "Learn about TanStack Store's primary state management primitive for mutable, reactive state"
+---
+
+## What is a Store?
+
+A Store is TanStack Store's primary state management primitive. It provides a simple, type-safe way to manage mutable, reactive state in your application. Stores can be created from initial values or getter functions, and they automatically notify subscribers when their state changes.
+
+## Creating Stores
+
+There are two ways to create a store using the `createStore` function:
+
+### From an Initial Value
+
+Create a mutable store by passing an initial value:
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const countStore = createStore(0)
+
+// Update the state
+countStore.setState((prev) => prev + 1)
+
+// Read the current state
+console.log(countStore.state) // 1
+```
+
+### From a Getter Function (Read-only)
+
+Create a read-only store by passing a getter function:
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const doubleStore = createStore(() => countStore.state * 2)
+
+// This is read-only, no setState method
+console.log(doubleStore.state) // 2
+```
+
+<Note>
+When you pass a function to `createStore`, it returns a `ReadonlyStore<T>` that cannot be updated directly. This is useful for derived state.
+</Note>
+
+## Store API
+
+### Type Signatures
+
+```typescript
+class Store<T> {
+  constructor(initialValue: T)
+  setState(updater: (prev: T) => T): void
+  get state(): T
+  get(): T
+  subscribe(
+    observerOrFn: Observer<T> | ((value: T) => void)
+  ): Subscription
+}
+
+class ReadonlyStore<T> {
+  constructor(getValue: (prev?: NoInfer<T>) => T)
+  get state(): T
+  get(): T
+  subscribe(
+    observerOrFn: Observer<T> | ((value: T) => void)
+  ): Subscription
+}
+
+// Factory function with overloads
+function createStore<T>(initialValue: T): Store<T>
+function createStore<T>(
+  getValue: (prev?: NoInfer<T>) => T
+): ReadonlyStore<T>
+```
+
+### Methods
+
+#### `setState(updater)`
+
+Updates the store's state using an updater function. Only available on mutable stores (not read-only stores).
+
+```typescript
+const store = createStore({ count: 0, name: 'Alice' })
+
+store.setState((prev) => ({
+  ...prev,
+  count: prev.count + 1,
+}))
+```
+
+<Warning>
+`setState` only exists on `Store<T>`, not `ReadonlyStore<T>`. Read-only stores are automatically recomputed when their dependencies change.
+</Warning>
+
+#### `state` / `get()`
+
+Both properties return the current state value. They are functionally equivalent:
+
+```typescript
+const store = createStore(42)
+
+console.log(store.state) // 42
+console.log(store.get())  // 42
+```
+
+#### `subscribe(observerOrFn)`
+
+Subscribes to changes in the store. Returns a subscription object with an `unsubscribe` method.
+
+```typescript
+const store = createStore(0)
+
+const subscription = store.subscribe((value) => {
+  console.log('Store updated:', value)
+})
+
+// Later, unsubscribe
+subscription.unsubscribe()
+```
+
+You can also pass an observer object:
+
+```typescript
+const subscription = store.subscribe({
+  next: (value) => console.log('Next:', value),
+  error: (err) => console.error('Error:', err),
+  complete: () => console.log('Complete'),
+})
+```
+
+## Practical Examples
+
+### Counter Store
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const counterStore = createStore(0)
+
+// Subscribe to changes
+counterStore.subscribe((count) => {
+  console.log('Count:', count)
+})
+
+// Increment
+counterStore.setState((prev) => prev + 1) // Logs: "Count: 1"
+
+// Decrement
+counterStore.setState((prev) => prev - 1) // Logs: "Count: 0"
+```
+
+### Todo List Store
+
+```typescript
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
+const todosStore = createStore<Todo[]>([])
+
+function addTodo(text: string) {
+  todosStore.setState((prev) => [
+    ...prev,
+    { id: Date.now(), text, completed: false },
+  ])
+}
+
+function toggleTodo(id: number) {
+  todosStore.setState((prev) =>
+    prev.map((todo) =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    )
+  )
+}
+
+function deleteTodo(id: number) {
+  todosStore.setState((prev) => prev.filter((todo) => todo.id !== id))
+}
+```
+
+### User Settings Store
+
+```typescript
+interface UserSettings {
+  theme: 'light' | 'dark'
+  language: string
+  notifications: boolean
+}
+
+const settingsStore = createStore<UserSettings>({
+  theme: 'light',
+  language: 'en',
+  notifications: true,
+})
+
+// Update a single setting
+function setTheme(theme: 'light' | 'dark') {
+  settingsStore.setState((prev) => ({ ...prev, theme }))
+}
+
+// Subscribe to theme changes only
+settingsStore.subscribe((settings) => {
+  document.documentElement.setAttribute('data-theme', settings.theme)
+})
+```
+
+## How Stores Work Internally
+
+Stores are a lightweight wrapper around [atoms](/concepts/atoms). When you create a store:
+
+1. An atom is created internally using `createAtom`
+2. The store provides a simpler API surface with `state`, `setState`, and `subscribe`
+3. For mutable stores, `setState` calls the atom's `set` method
+4. For read-only stores, the store automatically recomputes when dependencies change
+
+From store.ts:4-29:
+
+```typescript
+export class Store<T> {
+  private atom: Atom<T>
+  constructor(valueOrFn: T | ((prev?: T) => T)) {
+    this.atom = createAtom(
+      valueOrFn as T | ((prev?: NoInfer<T>) => T),
+    ) as Atom<T>
+  }
+  public setState(updater: (prev: T) => T) {
+    this.atom.set(updater)
+  }
+  public get state() {
+    return this.atom.get()
+  }
+  public subscribe(
+    observerOrFn: Observer<T> | ((value: T) => void),
+  ): Subscription {
+    return this.atom.subscribe(toObserver(observerOrFn))
+  }
+}
+```
+
+## When to Use Stores
+
+<CardGroup cols={2}>
+
+<Card title="Use Stores When" icon="check">
+  - You need simple, mutable state
+  - You want a high-level API
+  - You're building application state
+  - You want built-in reactivity
+</Card>
+
+<Card title="Use Atoms When" icon="atom">
+  - You need fine-grained control
+  - You're building a library
+  - You need custom comparison logic
+  - You want lower-level primitives
+</Card>
+
+</CardGroup>
+
+## Related Concepts
+
+<CardGroup cols={2}>
+
+<Card title="Atoms" icon="atom" href="/concepts/atoms">
+  Lower-level reactive primitives that power stores
+</Card>
+
+<Card title="Derived Stores" icon="share-nodes" href="/concepts/derived-stores">
+  Create stores that automatically compute from other stores
+</Card>
+
+<Card title="Subscriptions" icon="bell" href="/concepts/subscriptions">
+  Learn how to react to state changes
+</Card>
+
+<Card title="Batching" icon="layer-group" href="/concepts/batching">
+  Optimize performance by batching multiple updates
+</Card>
+
+</CardGroup>

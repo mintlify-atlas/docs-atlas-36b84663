@@ -1,0 +1,390 @@
+---
+title: "Atoms"
+description: "Understand the low-level reactive primitives that power TanStack Store"
+---
+
+## What is an Atom?
+
+Atoms are the foundational building blocks of TanStack Store's reactivity system. They are low-level primitives that provide fine-grained reactive state management with automatic dependency tracking.
+
+While [Stores](/concepts/stores) provide a simple, high-level API, atoms give you more control over reactivity, comparison logic, and performance optimization.
+
+## Creating Atoms
+
+Use the `createAtom` function to create atoms. Like stores, atoms can be created from values or getter functions:
+
+### Mutable Atoms (from values)
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const countAtom = createAtom(0)
+
+// Set the value
+countAtom.set(5)
+
+// Get the current value
+console.log(countAtom.get()) // 5
+```
+
+### Read-only Atoms (from functions)
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const doubledAtom = createAtom(() => countAtom.get() * 2)
+
+// Automatically recomputes when countAtom changes
+console.log(doubledAtom.get()) // 10
+```
+
+<Note>
+Read-only atoms (computed atoms) automatically track their dependencies and recompute only when necessary.
+</Note>
+
+## Type Signatures
+
+```typescript
+// Create from value - returns Atom<T>
+function createAtom<T>(
+  initialValue: T,
+  options?: AtomOptions<T>
+): Atom<T>
+
+// Create from getter - returns ReadonlyAtom<T>
+function createAtom<T>(
+  getValue: (prev?: NoInfer<T>) => T,
+  options?: AtomOptions<T>
+): ReadonlyAtom<T>
+
+interface Atom<T> extends BaseAtom<T> {
+  set: ((fn: (prevVal: T) => T) => void) & ((value: T) => void)
+}
+
+interface ReadonlyAtom<T> extends BaseAtom<T> {}
+
+interface BaseAtom<T> {
+  get: () => T
+  subscribe: (
+    observerOrFn: Observer<T> | ((value: T) => void)
+  ) => Subscription
+}
+
+interface AtomOptions<T> {
+  compare?: (prev: T, next: T) => boolean
+}
+```
+
+## Atom API
+
+### `set(valueOrUpdater)`
+
+Sets the atom's value. Available only on mutable atoms (not read-only atoms).
+
+```typescript
+const atom = createAtom(0)
+
+// Set directly
+atom.set(42)
+
+// Set using an updater function
+atom.set((prev) => prev + 1)
+```
+
+### `get()`
+
+Returns the current value of the atom. Automatically tracks dependencies when called inside computed atoms or subscriptions.
+
+```typescript
+const atom = createAtom(42)
+console.log(atom.get()) // 42
+```
+
+### `subscribe(observerOrFn)`
+
+Subscribes to changes in the atom. Returns a subscription with an `unsubscribe` method.
+
+```typescript
+const atom = createAtom(0)
+
+const sub = atom.subscribe((value) => {
+  console.log('Atom changed:', value)
+})
+
+// Trigger the subscription
+atom.set(1) // Logs: "Atom changed: 1"
+
+// Clean up
+sub.unsubscribe()
+```
+
+## Custom Comparison
+
+By default, atoms use `Object.is` to determine if a value has changed. You can provide a custom comparison function:
+
+```typescript
+interface Point {
+  x: number
+  y: number
+}
+
+const pointAtom = createAtom<Point>(
+  { x: 0, y: 0 },
+  {
+    compare: (prev, next) => {
+      // Only update if coordinates actually changed
+      return prev.x === next.x && prev.y === next.y
+    },
+  }
+)
+
+// This won't trigger subscribers (same values)
+pointAtom.set({ x: 0, y: 0 })
+
+// This will trigger subscribers
+pointAtom.set({ x: 1, y: 2 })
+```
+
+<Tip>
+Custom comparison functions are useful for avoiding unnecessary re-renders with complex objects or when you want to implement shallow equality.
+</Tip>
+
+## Computed Atoms (Derived State)
+
+Computed atoms automatically track dependencies and only recompute when their dependencies change:
+
+```typescript
+const firstNameAtom = createAtom('John')
+const lastNameAtom = createAtom('Doe')
+
+// Automatically tracks both firstName and lastName
+const fullNameAtom = createAtom(() => {
+  return `${firstNameAtom.get()} ${lastNameAtom.get()}`
+})
+
+console.log(fullNameAtom.get()) // "John Doe"
+
+firstNameAtom.set('Jane')
+console.log(fullNameAtom.get()) // "Jane Doe"
+```
+
+### Lazy Evaluation
+
+Computed atoms are lazy - they only compute when their value is accessed:
+
+```typescript
+const expensiveAtom = createAtom(() => {
+  console.log('Computing...')
+  return heavyComputation()
+})
+
+// Nothing logged yet - not computed until accessed
+
+const result = expensiveAtom.get() // Logs: "Computing..."
+const result2 = expensiveAtom.get() // No log - cached value returned
+```
+
+## Async Atoms
+
+TanStack Store provides `createAsyncAtom` for handling asynchronous state:
+
+```typescript
+import { createAsyncAtom } from '@tanstack/store'
+
+const userAtom = createAsyncAtom(async () => {
+  const response = await fetch('/api/user')
+  return response.json()
+})
+
+// Subscribe to state changes
+userAtom.subscribe((state) => {
+  if (state.status === 'pending') {
+    console.log('Loading...')
+  } else if (state.status === 'done') {
+    console.log('User:', state.data)
+  } else if (state.status === 'error') {
+    console.error('Error:', state.error)
+  }
+})
+```
+
+The state type is:
+
+```typescript
+type AsyncAtomState<TData, TError = unknown> =
+  | { status: 'pending' }
+  | { status: 'done'; data: TData }
+  | { status: 'error'; error: TError }
+```
+
+## Practical Examples
+
+### Shopping Cart
+
+```typescript
+interface CartItem {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
+
+const cartItemsAtom = createAtom<CartItem[]>([])
+
+// Computed total
+const cartTotalAtom = createAtom(() => {
+  const items = cartItemsAtom.get()
+  return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+})
+
+// Computed count
+const cartCountAtom = createAtom(() => {
+  const items = cartItemsAtom.get()
+  return items.reduce((sum, item) => sum + item.quantity, 0)
+})
+
+function addToCart(item: Omit<CartItem, 'quantity'>) {
+  cartItemsAtom.set((items) => {
+    const existing = items.find((i) => i.id === item.id)
+    if (existing) {
+      return items.map((i) =>
+        i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
+      )
+    }
+    return [...items, { ...item, quantity: 1 }]
+  })
+}
+```
+
+### Form State with Validation
+
+```typescript
+const emailAtom = createAtom('')
+const passwordAtom = createAtom('')
+
+const isEmailValidAtom = createAtom(() => {
+  const email = emailAtom.get()
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+})
+
+const isPasswordValidAtom = createAtom(() => {
+  const password = passwordAtom.get()
+  return password.length >= 8
+})
+
+const isFormValidAtom = createAtom(() => {
+  return isEmailValidAtom.get() && isPasswordValidAtom.get()
+})
+
+// Subscribe to form validity
+isFormValidAtom.subscribe((isValid) => {
+  submitButton.disabled = !isValid
+})
+```
+
+### Filtering and Sorting
+
+```typescript
+interface User {
+  id: number
+  name: string
+  age: number
+  active: boolean
+}
+
+const usersAtom = createAtom<User[]>([])
+const searchQueryAtom = createAtom('')
+const sortByAtom = createAtom<'name' | 'age'>('name')
+const showActiveOnlyAtom = createAtom(false)
+
+const filteredUsersAtom = createAtom(() => {
+  let users = usersAtom.get()
+  const query = searchQueryAtom.get().toLowerCase()
+  const sortBy = sortByAtom.get()
+  const activeOnly = showActiveOnlyAtom.get()
+
+  // Filter by search
+  if (query) {
+    users = users.filter((u) => u.name.toLowerCase().includes(query))
+  }
+
+  // Filter by active status
+  if (activeOnly) {
+    users = users.filter((u) => u.active)
+  }
+
+  // Sort
+  users = [...users].sort((a, b) => {
+    if (sortBy === 'name') {
+      return a.name.localeCompare(b.name)
+    }
+    return a.age - b.age
+  })
+
+  return users
+})
+```
+
+## How Atoms Work Internally
+
+Atoms use a reactive graph system with automatic dependency tracking:
+
+1. **Dependency Tracking**: When you call `get()` inside a computed atom or subscription, the atom automatically tracks that dependency
+2. **Change Propagation**: When a mutable atom changes via `set()`, it notifies all dependent atoms and subscriptions
+3. **Dirty Checking**: Computed atoms mark themselves as "dirty" and only recompute when accessed
+4. **Efficient Updates**: Only atoms that actually changed will trigger subscriber notifications
+
+From atom.ts:151-156:
+
+```typescript
+get(): T {
+  if (activeSub !== undefined) {
+    link(atom, activeSub, cycle)
+  }
+  return atom._snapshot
+}
+```
+
+## Atoms vs Stores
+
+<CardGroup cols={2}>
+
+<Card title="Atoms" icon="atom">
+  - Lower-level primitive
+  - Custom comparison logic
+  - More explicit API
+  - Better for libraries
+  - Direct control over reactivity
+</Card>
+
+<Card title="Stores" icon="database">
+  - Higher-level abstraction
+  - Simpler API
+  - Better for applications
+  - Built on top of atoms
+  - Convenient `state` property
+</Card>
+
+</CardGroup>
+
+## Related Concepts
+
+<CardGroup cols={2}>
+
+<Card title="Stores" icon="database" href="/concepts/stores">
+  High-level API built on atoms
+</Card>
+
+<Card title="Derived Stores" icon="share-nodes" href="/concepts/derived-stores">
+  Create computed state from multiple sources
+</Card>
+
+<Card title="Subscriptions" icon="bell" href="/concepts/subscriptions">
+  React to atom changes
+</Card>
+
+<Card title="Batching" icon="layer-group" href="/concepts/batching">
+  Batch multiple atom updates
+</Card>
+
+</CardGroup>

@@ -1,0 +1,469 @@
+---
+title: "Derived Stores"
+description: "Create reactive computed state that automatically updates when dependencies change"
+---
+
+## What are Derived Stores?
+
+Derived stores are read-only stores that automatically compute their value based on other stores or atoms. They are perfect for creating computed state that stays in sync with your source data without manual updates.
+
+When you create a store or atom with a getter function instead of an initial value, you get a derived (computed) store that:
+
+- Automatically tracks dependencies
+- Only recomputes when dependencies change
+- Evaluates lazily (only when accessed)
+- Cannot be directly mutated
+
+## Creating Derived Stores
+
+### Basic Derived Store
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const countStore = createStore(0)
+
+// This is a derived store - automatically tracks countStore
+const doubledStore = createStore(() => countStore.state * 2)
+
+console.log(doubledStore.state) // 0
+
+countStore.setState(() => 5)
+console.log(doubledStore.state) // 10
+```
+
+<Note>
+Derived stores created with `createStore` use the `.state` property to access values from other stores.
+</Note>
+
+### Derived Atoms
+
+You can also create derived state using atoms directly:
+
+```typescript
+import { createAtom } from '@tanstack/store'
+
+const countAtom = createAtom(0)
+
+// This is a computed atom - automatically tracks countAtom
+const doubledAtom = createAtom(() => countAtom.get() * 2)
+
+console.log(doubledAtom.get()) // 0
+
+countAtom.set(5)
+console.log(doubledAtom.get()) // 10
+```
+
+<Tip>
+Atoms use `.get()` instead of `.state` for accessing values.
+</Tip>
+
+## Multiple Dependencies
+
+Derived stores automatically track all dependencies accessed in their getter function:
+
+```typescript
+const firstNameStore = createStore('John')
+const lastNameStore = createStore('Doe')
+const ageStore = createStore(30)
+
+// Tracks all three stores
+const userSummaryStore = createStore(() => {
+  const firstName = firstNameStore.state
+  const lastName = lastNameStore.state
+  const age = ageStore.state
+  return `${firstName} ${lastName}, ${age} years old`
+})
+
+console.log(userSummaryStore.state)
+// "John Doe, 30 years old"
+
+firstNameStore.setState(() => 'Jane')
+console.log(userSummaryStore.state)
+// "Jane Doe, 30 years old"
+```
+
+## Chaining Derived Stores
+
+You can create chains of derived stores where each depends on the previous:
+
+```typescript
+const radiusStore = createStore(5)
+
+const areaStore = createStore(() => {
+  const radius = radiusStore.state
+  return Math.PI * radius * radius
+})
+
+const formattedAreaStore = createStore(() => {
+  const area = areaStore.state
+  return `${area.toFixed(2)} sq units`
+})
+
+radiusStore.setState(() => 10)
+console.log(formattedAreaStore.state) // "314.16 sq units"
+```
+
+## Conditional Dependencies
+
+Dependencies are tracked dynamically based on what is actually accessed:
+
+```typescript
+const modeStore = createStore<'simple' | 'detailed'>('simple')
+const basicInfoStore = createStore('Basic info')
+const detailedInfoStore = createStore('Detailed info')
+
+const displayStore = createStore(() => {
+  const mode = modeStore.state
+  
+  // Only tracks the store that is actually accessed
+  if (mode === 'simple') {
+    return basicInfoStore.state
+  } else {
+    return detailedInfoStore.state
+  }
+})
+
+// Initially only tracks modeStore and basicInfoStore
+console.log(displayStore.state) // "Basic info"
+
+// This won't trigger displayStore to update
+detailedInfoStore.setState(() => 'New detailed info')
+
+// This will trigger displayStore to update
+modeStore.setState(() => 'detailed')
+console.log(displayStore.state) // "New detailed info"
+```
+
+## Practical Examples
+
+### E-commerce Cart Total
+
+```typescript
+interface CartItem {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
+
+const cartItemsStore = createStore<CartItem[]>([])
+const taxRateStore = createStore(0.08) // 8% tax
+const discountStore = createStore(0) // Discount in dollars
+
+// Subtotal (before tax and discounts)
+const subtotalStore = createStore(() => {
+  const items = cartItemsStore.state
+  return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+})
+
+// Total after discount
+const afterDiscountStore = createStore(() => {
+  const subtotal = subtotalStore.state
+  const discount = discountStore.state
+  return Math.max(0, subtotal - discount)
+})
+
+// Tax amount
+const taxAmountStore = createStore(() => {
+  const afterDiscount = afterDiscountStore.state
+  const taxRate = taxRateStore.state
+  return afterDiscount * taxRate
+})
+
+// Final total
+const totalStore = createStore(() => {
+  const afterDiscount = afterDiscountStore.state
+  const tax = taxAmountStore.state
+  return afterDiscount + tax
+})
+
+// Usage
+cartItemsStore.setState(() => [
+  { id: '1', name: 'Widget', price: 10, quantity: 2 },
+  { id: '2', name: 'Gadget', price: 15, quantity: 1 },
+])
+
+discountStore.setState(() => 5)
+
+console.log(subtotalStore.state)      // 35
+console.log(afterDiscountStore.state) // 30
+console.log(taxAmountStore.state)     // 2.4
+console.log(totalStore.state)         // 32.4
+```
+
+### Search and Filter
+
+```typescript
+interface Product {
+  id: number
+  name: string
+  category: string
+  price: number
+  inStock: boolean
+}
+
+const productsStore = createStore<Product[]>([])
+const searchQueryStore = createStore('')
+const selectedCategoryStore = createStore<string | null>(null)
+const maxPriceStore = createStore<number>(Infinity)
+const showOutOfStockStore = createStore(true)
+
+// Filtered products
+const filteredProductsStore = createStore(() => {
+  let products = productsStore.state
+  const query = searchQueryStore.state.toLowerCase()
+  const category = selectedCategoryStore.state
+  const maxPrice = maxPriceStore.state
+  const showOutOfStock = showOutOfStockStore.state
+
+  // Apply filters
+  if (query) {
+    products = products.filter(p => 
+      p.name.toLowerCase().includes(query)
+    )
+  }
+
+  if (category) {
+    products = products.filter(p => p.category === category)
+  }
+
+  if (maxPrice < Infinity) {
+    products = products.filter(p => p.price <= maxPrice)
+  }
+
+  if (!showOutOfStock) {
+    products = products.filter(p => p.inStock)
+  }
+
+  return products
+})
+
+// Result count
+const resultCountStore = createStore(() => {
+  return filteredProductsStore.state.length
+})
+
+// Available categories from current results
+const availableCategoriesStore = createStore(() => {
+  const products = filteredProductsStore.state
+  return [...new Set(products.map(p => p.category))]
+})
+```
+
+### Form Validation
+
+```typescript
+const emailStore = createStore('')
+const passwordStore = createStore('')
+const confirmPasswordStore = createStore('')
+const agreeToTermsStore = createStore(false)
+
+// Individual field validations
+const isEmailValidStore = createStore(() => {
+  const email = emailStore.state
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+})
+
+const isPasswordValidStore = createStore(() => {
+  const password = passwordStore.state
+  return password.length >= 8
+})
+
+const passwordsMatchStore = createStore(() => {
+  return passwordStore.state === confirmPasswordStore.state
+})
+
+// Field error messages
+const emailErrorStore = createStore(() => {
+  const email = emailStore.state
+  const isValid = isEmailValidStore.state
+  
+  if (!email) return ''
+  if (!isValid) return 'Please enter a valid email'
+  return ''
+})
+
+const passwordErrorStore = createStore(() => {
+  const password = passwordStore.state
+  const isValid = isPasswordValidStore.state
+  
+  if (!password) return ''
+  if (!isValid) return 'Password must be at least 8 characters'
+  return ''
+})
+
+const confirmPasswordErrorStore = createStore(() => {
+  const confirmPassword = confirmPasswordStore.state
+  const match = passwordsMatchStore.state
+  
+  if (!confirmPassword) return ''
+  if (!match) return 'Passwords do not match'
+  return ''
+})
+
+// Overall form validity
+const isFormValidStore = createStore(() => {
+  return (
+    isEmailValidStore.state &&
+    isPasswordValidStore.state &&
+    passwordsMatchStore.state &&
+    agreeToTermsStore.state
+  )
+})
+```
+
+### Dashboard Statistics
+
+```typescript
+interface Sale {
+  id: string
+  amount: number
+  date: Date
+  status: 'pending' | 'completed' | 'refunded'
+}
+
+const salesStore = createStore<Sale[]>([])
+const dateRangeStore = createStore<{ start: Date; end: Date }>({
+  start: new Date('2024-01-01'),
+  end: new Date('2024-12-31'),
+})
+
+// Filtered sales by date range
+const filteredSalesStore = createStore(() => {
+  const sales = salesStore.state
+  const { start, end } = dateRangeStore.state
+  
+  return sales.filter(sale => 
+    sale.date >= start && sale.date <= end
+  )
+})
+
+// Total revenue
+const totalRevenueStore = createStore(() => {
+  const sales = filteredSalesStore.state
+  return sales
+    .filter(s => s.status === 'completed')
+    .reduce((sum, s) => sum + s.amount, 0)
+})
+
+// Average sale amount
+const averageSaleStore = createStore(() => {
+  const sales = filteredSalesStore.state
+  const completed = sales.filter(s => s.status === 'completed')
+  
+  if (completed.length === 0) return 0
+  
+  const total = completed.reduce((sum, s) => sum + s.amount, 0)
+  return total / completed.length
+})
+
+// Refund rate
+const refundRateStore = createStore(() => {
+  const sales = filteredSalesStore.state
+  if (sales.length === 0) return 0
+  
+  const refunded = sales.filter(s => s.status === 'refunded').length
+  return (refunded / sales.length) * 100
+})
+
+// Status breakdown
+const statusBreakdownStore = createStore(() => {
+  const sales = filteredSalesStore.state
+  
+  return {
+    pending: sales.filter(s => s.status === 'pending').length,
+    completed: sales.filter(s => s.status === 'completed').length,
+    refunded: sales.filter(s => s.status === 'refunded').length,
+  }
+})
+```
+
+## Performance Characteristics
+
+<AccordionGroup>
+
+<Accordion title="Lazy Evaluation">
+Derived stores only compute when their value is accessed. If a derived store isn't being used, it won't compute even if its dependencies change.
+
+```typescript
+const expensiveStore = createStore(() => {
+  console.log('Computing...')
+  return heavyComputation()
+})
+
+// No log - not computed yet
+
+const value = expensiveStore.state // Logs: "Computing..."
+const value2 = expensiveStore.state // No log - cached
+```
+</Accordion>
+
+<Accordion title="Automatic Caching">
+Derived stores cache their computed value and only recompute when dependencies actually change.
+
+```typescript
+const inputStore = createStore(5)
+const computedStore = createStore(() => {
+  console.log('Computing...')
+  return inputStore.state * 2
+})
+
+computedStore.state // Logs: "Computing..."
+computedStore.state // No log - uses cache
+computedStore.state // No log - uses cache
+
+inputStore.setState(() => 10)
+computedStore.state // Logs: "Computing..." - recomputes
+```
+</Accordion>
+
+<Accordion title="Minimal Updates">
+Only stores that are actually affected by a change will recompute, creating an efficient reactive graph.
+</Accordion>
+
+</AccordionGroup>
+
+## Best Practices
+
+<CardGroup cols={2}>
+
+<Card title="Keep Computations Pure" icon="function">
+  Derived stores should not have side effects. They should only compute and return a value based on their dependencies.
+</Card>
+
+<Card title="Avoid Expensive Operations" icon="gauge-high">
+  If a computation is expensive, consider memoizing intermediate results or using separate derived stores.
+</Card>
+
+<Card title="Use Specific Dependencies" icon="bullseye">
+  Only access the specific values you need to minimize unnecessary recomputation.
+</Card>
+
+<Card title="Chain When Logical" icon="link">
+  Break complex computations into multiple derived stores for better readability and performance.
+</Card>
+
+</CardGroup>
+
+## Related Concepts
+
+<CardGroup cols={2}>
+
+<Card title="Stores" icon="database" href="/concepts/stores">
+  Learn about the base store primitive
+</Card>
+
+<Card title="Atoms" icon="atom" href="/concepts/atoms">
+  Lower-level reactive primitives
+</Card>
+
+<Card title="Subscriptions" icon="bell" href="/concepts/subscriptions">
+  React to changes in derived stores
+</Card>
+
+<Card title="Batching" icon="layer-group" href="/concepts/batching">
+  Optimize multiple updates to source stores
+</Card>
+
+</CardGroup>

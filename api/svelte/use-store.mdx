@@ -1,0 +1,208 @@
+---
+title: useStore
+description: Svelte 5 rune-based function for subscribing to TanStack Store state
+---
+
+## Reference
+
+### `useStore`
+
+```ts
+function useStore<TState, TSelected = NoInfer<TState>>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: NoInfer<TState>) => TSelected,
+  options?: UseStoreOptions<TSelected>
+): { readonly current: TSelected }
+```
+
+A Svelte 5 function that subscribes to a TanStack Store atom using runes and returns a reactive object with a `current` property. The value will update when the selected state changes according to the equality function.
+
+<ParamField path="store" type="Atom<TState> | ReadonlyAtom<TState>">
+  The store atom to subscribe to.
+</ParamField>
+
+<ParamField path="selector" type="(state: TState) => TSelected" default="(d) => d">
+  Optional function that selects a slice of state from the atom. Defaults to returning the entire state.
+</ParamField>
+
+<ParamField path="options" type="UseStoreOptions<TSelected>">
+  Optional configuration object.
+  
+  <Expandable title="properties">
+    <ResponseField name="equal" type="(a: TSelected, b: TSelected) => boolean" default="shallow">
+      Equality function to determine if the selected state has changed. Defaults to `shallow` comparison.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="{ readonly current: TSelected }" type="{ readonly current: TSelected }">
+  A reactive object with a readonly `current` property containing the selected state value.
+</ResponseField>
+
+## Usage
+
+### Basic Usage
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const count = useStore(store, (state) => state.count)
+</script>
+
+<div>Count: {count.current}</div>
+```
+
+### Selecting Multiple Values
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const user = useStore(store, (state) => ({
+  name: state.user.name,
+  email: state.user.email,
+  avatar: state.user.avatar
+}))
+</script>
+
+<div>
+  <h2>{user.current.name}</h2>
+  <p>{user.current.email}</p>
+  <img src={user.current.avatar} alt="Avatar" />
+</div>
+```
+
+### Custom Equality Function
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+// Custom deep equality
+const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
+const settings = useStore(
+  store,
+  (state) => state.settings,
+  { equal: deepEqual }
+)
+</script>
+
+<div>{JSON.stringify(settings.current)}</div>
+```
+
+### Using Entire State
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const state = useStore(store)
+</script>
+
+<div>
+  <p>Count: {state.current.count}</p>
+  <p>Name: {state.current.name}</p>
+  <p>Active: {state.current.isActive}</p>
+</div>
+```
+
+### With Conditional Rendering
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const isLoggedIn = useStore(store, (state) => state.isLoggedIn)
+const user = useStore(store, (state) => state.user)
+</script>
+
+{#if isLoggedIn.current}
+  <div>Welcome, {user.current.name}!</div>
+{:else}
+  <div>Please log in</div>
+{/if}
+```
+
+### With Each Blocks
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const todos = useStore(store, (state) => state.todos)
+</script>
+
+<ul>
+  {#each todos.current as todo (todo.id)}
+    <li>{todo.text}</li>
+  {/each}
+</ul>
+```
+
+### Derived Values
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const todos = useStore(store, (state) => state.todos)
+
+// Use $derived rune for computed values
+const stats = $derived({
+  total: todos.current.length,
+  completed: todos.current.filter(t => t.done).length,
+  pending: todos.current.filter(t => !t.done).length
+})
+</script>
+
+<div>
+  <p>Total: {stats.total}</p>
+  <p>Completed: {stats.completed}</p>
+  <p>Pending: {stats.pending}</p>
+</div>
+```
+
+### Selecting Array Slices
+
+```svelte
+<script>
+import { useStore } from '@tanstack/svelte-store'
+import { store } from './store'
+
+const activeItems = useStore(
+  store,
+  (state) => state.items.filter(item => item.active)
+)
+</script>
+
+<div>
+  <p>Active items: {activeItems.current.length}</p>
+  <ul>
+    {#each activeItems.current as item (item.id)}
+      <li>{item.name}</li>
+    {/each}
+  </ul>
+</div>
+```
+
+## Notes
+
+- Built for **Svelte 5** using the new runes system (`$state`, `$effect`)
+- Returns an object with a **readonly** `current` property
+- Uses `$state` rune internally for reactivity
+- Automatically cleans up subscriptions using `$effect` cleanup
+- Defaults to `shallow` equality comparison
+- Access the value via `.current` property
+- Compatible with Svelte's reactive declarations and derived values
+- Works seamlessly with `{#if}`, `{#each}`, and other Svelte control flow

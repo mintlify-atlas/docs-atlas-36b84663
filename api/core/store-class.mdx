@@ -1,0 +1,219 @@
+---
+title: 'Store'
+description: 'Mutable store class for managing reactive state'
+---
+
+## Class Overview
+
+```typescript
+class Store<T> {
+  constructor(initialValue: T)
+  get state(): T
+  get(): T
+  setState(updater: (prev: T) => T): void
+  subscribe(observerOrFn: Observer<T> | ((value: T) => void)): Subscription
+}
+```
+
+The `Store` class is a mutable reactive container that holds state and notifies subscribers when the state changes. It's created by calling `createStore()` with an initial value.
+
+## Constructor
+
+<ParamField path="initialValue" type="T" required>
+  The initial value to store. Can be any type.
+</ParamField>
+
+## Properties
+
+### state
+
+```typescript
+get state(): T
+```
+
+Gets the current state value.
+
+<ResponseField name="state" type="T">
+  The current state stored in the store.
+</ResponseField>
+
+## Methods
+
+### get()
+
+```typescript
+get(): T
+```
+
+Gets the current state value. This is an alias for the `state` property.
+
+<ResponseField name="return" type="T">
+  The current state stored in the store.
+</ResponseField>
+
+### setState()
+
+```typescript
+setState(updater: (prev: T) => T): void
+```
+
+Updates the state. The updater function receives the previous state and should return the new state.
+
+<ParamField path="updater" type="(prev: T) => T" required>
+  A function that receives the previous state and returns the new state.
+  
+  - `prev` - The current state value
+</ParamField>
+
+<Note>
+  Always use functional updates with `setState()` to ensure you're working with the latest state value.
+</Note>
+
+### subscribe()
+
+```typescript
+subscribe(observerOrFn: Observer<T> | ((value: T) => void)): Subscription
+```
+
+Subscribes to state changes. The callback is invoked whenever the state changes.
+
+<ParamField path="observerOrFn" type="Observer<T> | ((value: T) => void)" required>
+  Either a callback function that receives the new state, or an observer object with `next`, `error`, and `complete` methods.
+</ParamField>
+
+<ResponseField name="Subscription" type="{ unsubscribe: () => void }">
+  A subscription object with an `unsubscribe()` method to stop receiving updates.
+</ResponseField>
+
+## Examples
+
+### Basic Usage
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const store = createStore(0)
+
+// Get the current state
+console.log(store.state) // 0
+console.log(store.get()) // 0 (same as store.state)
+
+// Update the state
+store.setState((prev) => prev + 1)
+console.log(store.state) // 1
+```
+
+### Managing Object State
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+interface User {
+  name: string
+  age: number
+  email: string
+}
+
+const userStore = createStore<User>({
+  name: 'John Doe',
+  age: 30,
+  email: 'john@example.com'
+})
+
+// Update a single property
+userStore.setState((prev) => ({
+  ...prev,
+  age: prev.age + 1
+}))
+
+// Update multiple properties
+userStore.setState((prev) => ({
+  ...prev,
+  name: 'Jane Doe',
+  email: 'jane@example.com'
+}))
+```
+
+### Subscribing to Changes
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const store = createStore({ count: 0 })
+
+// Subscribe with a function
+const subscription = store.subscribe((state) => {
+  console.log('Count is now:', state.count)
+})
+
+// Update the state
+store.setState((prev) => ({ count: prev.count + 1 }))
+// Logs: Count is now: 1
+
+// Unsubscribe when done
+subscription.unsubscribe()
+```
+
+### Using Observer Pattern
+
+```typescript
+import { createStore } from '@tanstack/store'
+import type { Observer } from '@tanstack/store'
+
+const store = createStore(0)
+
+const observer: Observer<number> = {
+  next: (value) => console.log('Next value:', value),
+  error: (err) => console.error('Error:', err),
+  complete: () => console.log('Complete')
+}
+
+const subscription = store.subscribe(observer)
+
+store.setState((prev) => prev + 1)
+// Logs: Next value: 1
+
+subscription.unsubscribe()
+```
+
+### Array State Management
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const todosStore = createStore<string[]>([])
+
+// Add item
+todosStore.setState((prev) => [...prev, 'New todo'])
+
+// Remove item
+todosStore.setState((prev) => prev.filter((_, i) => i !== 0))
+
+// Update item
+todosStore.setState((prev) => 
+  prev.map((todo, i) => i === 0 ? 'Updated todo' : todo)
+)
+```
+
+### Conditional Updates
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const counterStore = createStore(0)
+
+// Only update if value is less than 10
+counterStore.setState((prev) => {
+  if (prev < 10) {
+    return prev + 1
+  }
+  return prev // No change
+})
+```
+
+## Related APIs
+
+- [createStore](/api/core/create-store) - Factory function to create stores
+- [ReadonlyStore](/api/core/readonly-store) - Read-only variant without setState
+- [Atom](/api/core/create-atom) - Lower-level reactive primitive
+- [batch](/api/core/batch) - Batch multiple updates together

@@ -1,0 +1,137 @@
+---
+title: Introduction
+description: An immutable, reactive data store with framework adapters that powers the core of the TanStack ecosystem
+---
+
+# Introduction to TanStack Store
+
+TanStack Store is a framework-agnostic, type-safe data store that provides fine-grained reactivity and immutable state management. It serves as the foundation for state management across the TanStack ecosystem and can be used as a standalone library in any JavaScript application.
+
+## What is TanStack Store?
+
+TanStack Store is an immutable, reactive data store built on a powerful signals implementation. It provides:
+
+- **Fine-grained updates** for optimal rendering performance
+- **Framework adapters** for React, Vue, Solid, Angular, Svelte, and Preact
+- **Type-safe API** with full TypeScript support
+- **Lightweight core** with minimal dependencies
+- **Flexible primitives** for building custom state logic
+
+<Info>
+TanStack Store is currently used to power the internals of many TanStack libraries, proving its reliability and performance at scale.
+</Info>
+
+## Key Features
+
+### Framework Agnostic
+
+TanStack Store works across all major frameworks with dedicated adapters. Use the same store logic whether you're building with React, Vue, Solid, or any other framework.
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const store = createStore(0)
+```
+
+### Fine-Grained Reactivity
+
+Components only re-render when the specific data they depend on changes. This fine-grained reactivity ensures optimal performance even in complex applications.
+
+### Immutable State Management
+
+All state updates create new immutable snapshots, making your application's state predictable and easy to debug.
+
+```typescript
+const countStore = createStore(0)
+
+countStore.setState(() => 1)
+console.log(countStore.state) // 1
+```
+
+### Derived Stores
+
+Create computed stores that automatically update when their dependencies change:
+
+```typescript
+const count = createStore(5)
+const double = createStore(() => count.state * 2)
+
+console.log(double.state) // 10
+count.setState(() => 10)
+console.log(double.state) // 20
+```
+
+## What Problems Does It Solve?
+
+### Performance Bottlenecks
+
+Traditional state management solutions often cause unnecessary re-renders. TanStack Store's fine-grained reactivity ensures components only update when their specific dependencies change.
+
+### Framework Lock-in
+
+Build your state logic once and use it across different frameworks. Perfect for component libraries, shared utilities, or migrating between frameworks.
+
+### Complex State Logic
+
+With powerful primitives like derived stores, batched updates, and subscriptions, you can build sophisticated state management patterns without external dependencies.
+
+### Type Safety
+
+Full TypeScript support ensures your state management is type-safe from end to end, catching errors at compile time rather than runtime.
+
+## Use Cases
+
+<Steps>
+  <Step title="Application State Management">
+    Use TanStack Store as your primary state management solution for React, Vue, Solid, or any other framework.
+  </Step>
+  
+  <Step title="Library Development">
+    Build framework-agnostic libraries with reactive state that works seamlessly across all frameworks.
+  </Step>
+  
+  <Step title="Micro-Frontends">
+    Share state between micro-frontends built with different frameworks using a single store implementation.
+  </Step>
+  
+  <Step title="Performance-Critical UIs">
+    Leverage fine-grained reactivity for complex UIs where performance is critical, like data grids or real-time dashboards.
+  </Step>
+</Steps>
+
+## How It Works
+
+TanStack Store is built on a signals-based reactive system. When you create a store, it wraps your data in an atom that tracks dependencies and notifies subscribers when changes occur.
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+// Create a store with initial state
+const store = createStore(0)
+
+// Subscribe to changes
+const { unsubscribe } = store.subscribe(() => {
+  console.log('Count changed to:', store.state)
+})
+
+// Update state
+store.setState(() => 1) // Logs: "Count changed to: 1"
+
+// Cleanup
+unsubscribe()
+```
+
+Framework adapters provide hooks or composables that integrate seamlessly with your framework's reactivity system.
+
+## Next Steps
+
+Ready to get started? Check out our [Quickstart Guide](/quickstart) to build your first store in minutes.
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install TanStack Store for your framework
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first store in 5 minutes
+  </Card>
+</CardGroup>

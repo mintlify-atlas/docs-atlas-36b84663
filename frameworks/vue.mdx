@@ -1,0 +1,435 @@
+---
+title: Vue
+description: Use TanStack Store in Vue applications
+---
+
+TanStack Store provides Vue support through the `@tanstack/vue-store` package, which integrates with Vue's reactivity system using composables. It supports both Vue 2.7+ and Vue 3.
+
+## Installation
+
+Install the Vue adapter package:
+
+<CodeGroup>
+
+```bash npm
+npm install @tanstack/vue-store
+```
+
+```bash pnpm
+pnpm add @tanstack/vue-store
+```
+
+```bash yarn
+yarn add @tanstack/vue-store
+```
+
+```bash bun
+bun add @tanstack/vue-store
+```
+
+</CodeGroup>
+
+<Note>
+  The `@tanstack/vue-store` package re-exports everything from `@tanstack/store`, so you only need to install the Vue package.
+</Note>
+
+## Vue Version Compatibility
+
+The package uses `vue-demi` to support multiple Vue versions:
+- Vue 3.x (recommended)
+- Vue 2.7+
+- Vue 2.6 with `@vue/composition-api`
+
+## Basic Usage
+
+The primary way to use TanStack Store in Vue is through the `useStore` composable:
+
+```vue
+<script setup lang="ts">
+import { createStore, useStore } from '@tanstack/vue-store'
+
+// Create a store
+const counterStore = createStore({
+  count: 0,
+})
+
+// Subscribe to the store
+const count = useStore(counterStore, (state) => state.count)
+
+const increment = () => {
+  counterStore.setState((prev) => ({ count: prev.count + 1 }))
+}
+</script>
+
+<template>
+  <div>
+    <p>Count: {{ count }}</p>
+    <button @click="increment">Increment</button>
+  </div>
+</template>
+```
+
+## The useStore Composable
+
+The `useStore` composable subscribes your component to store updates and returns a readonly ref that automatically updates.
+
+### Signature
+
+```typescript
+function useStore<TState, TSelected>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: TState) => TSelected,
+  options?: { equal?: (a: TSelected, b: TSelected) => boolean }
+): Readonly<Ref<TSelected>>
+```
+
+### Parameters
+
+- `store` - The store instance to subscribe to
+- `selector` - (Optional) A function that selects which part of the state you need. Defaults to returning the entire state
+- `options.equal` - (Optional) A custom equality function. Defaults to `shallow`
+
+### Return Value
+
+Returns a readonly Vue `Ref` containing the selected state. Use `.value` to access the state value in script, or directly in templates.
+
+## Selector Optimization
+
+The selector function allows you to subscribe to only the parts of state you need:
+
+```vue
+<script setup lang="ts">
+import { createStore, useStore } from '@tanstack/vue-store'
+
+const appStore = createStore({
+  user: { name: 'Alice', age: 30 },
+  settings: { theme: 'dark', notifications: true },
+})
+
+// Only updates when user.name changes
+const userName = useStore(appStore, (state) => state.user.name)
+
+// Only updates when settings change
+const settings = useStore(appStore, (state) => state.settings)
+</script>
+
+<template>
+  <div>
+    <h1>Welcome, {{ userName }}!</h1>
+    <div>
+      <p>Theme: {{ settings.theme }}</p>
+      <p>Notifications: {{ settings.notifications ? 'On' : 'Off' }}</p>
+    </div>
+  </div>
+</template>
+```
+
+## Custom Equality Functions
+
+For complex state selections, provide a custom equality function:
+
+```vue
+<script setup lang="ts">
+import { createStore, useStore } from '@tanstack/vue-store'
+
+const todoStore = createStore({
+  todos: [
+    { id: 1, text: 'Buy groceries', completed: false },
+    { id: 2, text: 'Walk the dog', completed: true },
+  ],
+})
+
+function deepEqual<T>(a: T, b: T): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+// Use deep equality for array comparison
+const activeTodos = useStore(
+  todoStore,
+  (state) => state.todos.filter((todo) => !todo.completed),
+  { equal: deepEqual }
+)
+</script>
+
+<template>
+  <ul>
+    <li v-for="todo in activeTodos" :key="todo.id">
+      {{ todo.text }}
+    </li>
+  </ul>
+</template>
+```
+
+## Shallow Equality
+
+The package exports a `shallow` utility for shallow object comparison (this is the default):
+
+```vue
+<script setup lang="ts">
+import { createStore, useStore, shallow } from '@tanstack/vue-store'
+
+const userStore = createStore({
+  profile: { name: 'Alice', email: 'alice@example.com' },
+  preferences: { theme: 'dark' },
+})
+
+// Explicitly use shallow comparison (this is the default)
+const profile = useStore(
+  userStore,
+  (state) => state.profile,
+  { equal: shallow }
+)
+</script>
+
+<template>
+  <div>
+    <h2>{{ profile.name }}</h2>
+    <p>{{ profile.email }}</p>
+  </div>
+</template>
+```
+
+## Complete Example: Todo App
+
+Here's a complete Todo application using Vue 3 Composition API:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+import { createStore, useStore } from '@tanstack/vue-store'
+
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
+interface TodoState {
+  todos: Todo[]
+  filter: 'all' | 'active' | 'completed'
+}
+
+const todoStore = createStore<TodoState>({
+  todos: [],
+  filter: 'all',
+})
+
+// Actions
+const addTodo = (text: string) => {
+  todoStore.setState((state) => ({
+    ...state,
+    todos: [
+      ...state.todos,
+      { id: Date.now(), text, completed: false },
+    ],
+  }))
+}
+
+const toggleTodo = (id: number) => {
+  todoStore.setState((state) => ({
+    ...state,
+    todos: state.todos.map((todo) =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ),
+  }))
+}
+
+const setFilter = (filter: TodoState['filter']) => {
+  todoStore.setState((state) => ({ ...state, filter }))
+}
+
+// Component state
+const input = ref('')
+
+// Subscribe to store
+const filter = useStore(todoStore, (state) => state.filter)
+const todos = useStore(todoStore, (state) => {
+  const { todos, filter } = state
+  if (filter === 'active') return todos.filter((t) => !t.completed)
+  if (filter === 'completed') return todos.filter((t) => t.completed)
+  return todos
+})
+
+const handleSubmit = () => {
+  if (input.value.trim()) {
+    addTodo(input.value)
+    input.value = ''
+  }
+}
+</script>
+
+<template>
+  <div>
+    <h1>Todo App</h1>
+    
+    <form @submit.prevent="handleSubmit">
+      <input
+        v-model="input"
+        placeholder="What needs to be done?"
+      />
+      <button type="submit">Add</button>
+    </form>
+
+    <div>
+      <button @click="setFilter('all')">All</button>
+      <button @click="setFilter('active')">Active</button>
+      <button @click="setFilter('completed')">Completed</button>
+    </div>
+
+    <ul>
+      <li v-for="todo in todos" :key="todo.id">
+        <input
+          type="checkbox"
+          :checked="todo.completed"
+          @change="toggleTodo(todo.id)"
+        />
+        <span :style="{ textDecoration: todo.completed ? 'line-through' : 'none' }">
+          {{ todo.text }}
+        </span>
+      </li>
+    </ul>
+  </div>
+</template>
+```
+
+## Options API Support
+
+While the Composition API is recommended, you can use stores with the Options API:
+
+```vue
+<script lang="ts">
+import { defineComponent } from 'vue'
+import { createStore, useStore } from '@tanstack/vue-store'
+
+const counterStore = createStore({ count: 0 })
+
+export default defineComponent({
+  setup() {
+    const count = useStore(counterStore, (state) => state.count)
+    
+    return {
+      count,
+      increment: () => counterStore.setState((prev) => ({ count: prev.count + 1 }))
+    }
+  },
+})
+</script>
+
+<template>
+  <div>
+    <p>Count: {{ count }}</p>
+    <button @click="increment">Increment</button>
+  </div>
+</template>
+```
+
+## Vue-Specific Considerations
+
+### Reactivity System Integration
+
+The Vue adapter integrates deeply with Vue's reactivity system:
+- Uses `watch` to subscribe to store changes
+- Returns readonly refs to prevent accidental mutations
+- Automatically cleans up subscriptions when components unmount
+
+### Server-Side Rendering (SSR)
+
+TanStack Store works with Vue SSR. Create stores at module level and initialize them with server data:
+
+```typescript
+import { createStore } from '@tanstack/vue-store'
+
+// Create store at module level
+export const appStore = createStore({
+  data: null,
+  isLoading: false,
+})
+
+// Initialize with SSR data
+export function initializeStore(initialData: any) {
+  appStore.setState({ data: initialData, isLoading: false })
+}
+```
+
+### Nuxt Integration
+
+For Nuxt 3, create a plugin to initialize stores:
+
+```typescript
+// plugins/store.ts
+import { appStore } from '~/stores/app'
+
+export default defineNuxtPlugin(() => {
+  // Initialize your stores here if needed
+})
+```
+
+### Performance Tips
+
+1. **Use selective subscriptions**: Subscribe only to the state you need
+2. **Leverage the default shallow equality**: It works well for most cases
+3. **Create focused stores**: Multiple small stores perform better than one large store
+4. **Use computed refs**: For derived state within components, use Vue's `computed`
+
+## Derived Stores
+
+Create derived stores that react to other stores:
+
+```vue
+<script setup lang="ts">
+import { createStore, useStore } from '@tanstack/vue-store'
+
+const countStore = createStore(0)
+const doubleStore = createStore(() => ({ value: countStore.state * 2 }))
+
+const count = useStore(countStore, (state) => state)
+const double = useStore(doubleStore, (state) => state.value)
+
+const increment = () => {
+  countStore.setState((prev) => prev + 1)
+}
+</script>
+
+<template>
+  <div>
+    <p>Count: {{ count }}</p>
+    <p>Double: {{ double }}</p>
+    <button @click="increment">Increment</button>
+  </div>
+</template>
+```
+
+## API Reference
+
+For detailed API documentation, see:
+- - [useStore](/api/vue/use-store) - Vue composable for subscribing to stores
+- - [shallow](/api/vue/shallow) - Shallow equality comparison utility
+- [createStore](/api/core/create-store) - Core store creation API
+
+## TypeScript Support
+
+The Vue adapter provides full TypeScript support:
+
+```vue
+<script setup lang="ts">
+import { createStore, useStore } from '@tanstack/vue-store'
+
+interface AppState {
+  user: { name: string; id: number }
+  isAuthenticated: boolean
+}
+
+const store = createStore<AppState>({
+  user: { name: '', id: 0 },
+  isAuthenticated: false,
+})
+
+// TypeScript infers the correct types
+const userName = useStore(store, (state) => state.user.name)
+// userName is Readonly<Ref<string>>
+</script>
+
+<template>
+  <div>{{ userName }}</div>
+</template>
+```

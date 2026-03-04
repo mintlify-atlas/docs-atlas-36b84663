@@ -1,0 +1,145 @@
+---
+title: 'createStore'
+description: 'Create a reactive store for managing state'
+---
+
+## Function Signature
+
+```typescript
+function createStore<T>(getValue: (prev?: NoInfer<T>) => T): ReadonlyStore<T>
+function createStore<T>(initialValue: T): Store<T>
+```
+
+Creates a reactive store that can hold and manage state. The function has two overloads:
+
+- When passed a function, it creates a **ReadonlyStore** with computed/derived state
+- When passed a value, it creates a **Store** with mutable state
+
+## Parameters
+
+<ParamField path="initialValue" type="T">
+  The initial value for the store. Creates a mutable store that can be updated with `setState()`.
+</ParamField>
+
+<ParamField path="getValue" type="(prev?: NoInfer<T>) => T">
+  A getter function that computes the store's value. Creates a readonly store that automatically recomputes when dependencies change.
+  
+  - `prev` - The previous computed value (optional)
+</ParamField>
+
+## Returns
+
+<ResponseField name="Store<T>" type="Store<T>">
+  Returns a mutable `Store` instance when initialized with a value. Provides:
+  - `state` - Get the current state
+  - `get()` - Get the current state (alias)
+  - `setState(updater)` - Update the state
+  - `subscribe(observer)` - Subscribe to state changes
+</ResponseField>
+
+<ResponseField name="ReadonlyStore<T>" type="ReadonlyStore<T>">
+  Returns a readonly `ReadonlyStore` instance when initialized with a function. Provides:
+  - `state` - Get the current computed state
+  - `get()` - Get the current computed state (alias)
+  - `subscribe(observer)` - Subscribe to state changes
+</ResponseField>
+
+## Examples
+
+### Basic Store
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+// Create a mutable store with initial value
+const counterStore = createStore(0)
+
+console.log(counterStore.state) // 0
+
+// Update the state
+counterStore.setState((prev) => prev + 1)
+
+console.log(counterStore.state) // 1
+```
+
+### Computed/Derived Store
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+// Create stores for first and last name
+const firstNameStore = createStore('John')
+const lastNameStore = createStore('Doe')
+
+// Create a readonly computed store that derives from other stores
+const fullNameStore = createStore(() => {
+  return `${firstNameStore.state} ${lastNameStore.state}`
+})
+
+console.log(fullNameStore.state) // 'John Doe'
+
+// Update the source stores
+firstNameStore.setState(() => 'Jane')
+
+console.log(fullNameStore.state) // 'Jane Doe'
+```
+
+### Subscribing to Changes
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const store = createStore({ count: 0, name: 'Counter' })
+
+// Subscribe to state changes
+const subscription = store.subscribe((state) => {
+  console.log('State changed:', state)
+})
+
+store.setState((prev) => ({ ...prev, count: prev.count + 1 }))
+// Logs: State changed: { count: 1, name: 'Counter' }
+
+// Unsubscribe when done
+subscription.unsubscribe()
+```
+
+### Complex State Management
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+interface TodoState {
+  todos: Array<{ id: number; text: string; completed: boolean }>
+  filter: 'all' | 'active' | 'completed'
+}
+
+const todoStore = createStore<TodoState>({
+  todos: [],
+  filter: 'all'
+})
+
+// Add a todo
+todoStore.setState((prev) => ({
+  ...prev,
+  todos: [...prev.todos, { id: Date.now(), text: 'Learn TanStack Store', completed: false }]
+}))
+
+// Create a computed store for filtered todos
+const filteredTodosStore = createStore(() => {
+  const state = todoStore.state
+  switch (state.filter) {
+    case 'active':
+      return state.todos.filter(todo => !todo.completed)
+    case 'completed':
+      return state.todos.filter(todo => todo.completed)
+    default:
+      return state.todos
+  }
+})
+```
+
+## Related APIs
+
+- [Store Class](/api/core/store-class) - Methods available on Store instances
+- [ReadonlyStore Class](/api/core/readonly-store) - Methods available on ReadonlyStore instances
+- [createAtom](/api/core/create-atom) - Lower-level primitive for reactive values

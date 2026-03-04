@@ -1,0 +1,212 @@
+---
+title: Observer
+description: The Observer type for subscribing to atom changes
+---
+
+# Observer
+
+The `Observer<T>` type defines the callback interface for observing changes to an atom's value. It follows the RxJS observer pattern.
+
+## Type Definition
+
+```typescript
+// Based on RxJS types
+type Observer<T> = {
+  next?: (value: T) => void
+  error?: (err: unknown) => void
+  complete?: () => void
+}
+```
+
+## Properties
+
+### `next`
+
+Called whenever the atom emits a new value.
+
+**Type:**
+```typescript
+(value: T) => void
+```
+
+**Optional:** Yes
+
+### `error`
+
+Called when an error occurs during the atom's operation.
+
+**Type:**
+```typescript
+(err: unknown) => void
+```
+
+**Optional:** Yes
+
+### `complete`
+
+Called when the atom completes and will no longer emit values.
+
+**Type:**
+```typescript
+() => void
+```
+
+**Optional:** Yes
+
+## Usage Examples
+
+### Basic observer with next callback
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const counterAtom = atom(0)
+
+const observer = {
+  next: (value: number) => {
+    console.log('Counter value:', value)
+  }
+}
+
+const subscription = counterAtom.subscribe(observer)
+
+counterAtom.set(1) // Logs: "Counter value: 1"
+counterAtom.set(2) // Logs: "Counter value: 2"
+
+subscription.unsubscribe()
+```
+
+### Full observer with all callbacks
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const dataAtom = atom<string>('initial')
+
+const observer = {
+  next: (value: string) => {
+    console.log('New value:', value)
+  },
+  error: (err: unknown) => {
+    console.error('Error occurred:', err)
+  },
+  complete: () => {
+    console.log('Observable completed')
+  }
+}
+
+const subscription = dataAtom.subscribe(observer)
+
+dataAtom.set('updated') // Logs: "New value: updated"
+
+subscription.unsubscribe()
+```
+
+### Simplified function syntax
+
+The `subscribe` method also accepts a simpler syntax where you can pass the callbacks as separate function arguments:
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const counterAtom = atom(0)
+
+// Subscribe with just the next callback
+const subscription = counterAtom.subscribe(
+  (value) => console.log('Value:', value)
+)
+
+counterAtom.set(5) // Logs: "Value: 5"
+
+subscription.unsubscribe()
+```
+
+### With error and complete handlers
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const dataAtom = atom('hello')
+
+const subscription = dataAtom.subscribe(
+  (value) => console.log('Next:', value),
+  (error) => console.error('Error:', error),
+  () => console.log('Complete')
+)
+
+dataAtom.set('world') // Logs: "Next: world"
+
+subscription.unsubscribe()
+```
+
+### Type-safe observer
+
+```typescript
+import { atom, type Observer } from '@tanstack/store'
+
+interface User {
+  name: string
+  age: number
+}
+
+const userAtom = atom<User>({ name: 'Alice', age: 25 })
+
+const userObserver: Observer<User> = {
+  next: (user) => {
+    // TypeScript knows user is of type User
+    console.log(`${user.name} is ${user.age} years old`)
+  },
+  error: (err) => {
+    console.error('Failed to update user:', err)
+  }
+}
+
+const subscription = userAtom.subscribe(userObserver)
+
+userAtom.set({ name: 'Bob', age: 30 })
+// Logs: "Bob is 30 years old"
+
+subscription.unsubscribe()
+```
+
+### Conditional observer logic
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const temperatureAtom = atom(20)
+
+const subscription = temperatureAtom.subscribe({
+  next: (temp) => {
+    if (temp > 30) {
+      console.log('Hot!')
+    } else if (temp < 10) {
+      console.log('Cold!')
+    } else {
+      console.log('Pleasant')
+    }
+  }
+})
+
+temperatureAtom.set(35) // Logs: "Hot!"
+temperatureAtom.set(5)  // Logs: "Cold!"
+temperatureAtom.set(22) // Logs: "Pleasant"
+
+subscription.unsubscribe()
+```
+
+## Observer Pattern
+
+The Observer type follows the standard observer pattern used in reactive programming:
+
+1. **next**: Handles the normal flow of data
+2. **error**: Handles any errors that occur
+3. **complete**: Handles the completion of the observable stream
+
+In TanStack Store, atoms typically only use the `next` callback, as atoms are long-lived and don't usually complete or error in the traditional RxJS sense.
+
+## Related Types
+
+- [Subscription](/api/types/subscription) - The object returned when subscribing with an observer
+- [Atom](/api/types/atom) - The writable atom type that can be observed
+- [ReadonlyAtom](/api/types/readonly-atom) - The read-only atom type that can be observed

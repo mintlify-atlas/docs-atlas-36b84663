@@ -1,0 +1,263 @@
+---
+title: 'ReadonlyStore'
+description: 'Read-only store class for computed/derived reactive state'
+---
+
+## Class Overview
+
+```typescript
+class ReadonlyStore<T> implements Omit<Store<T>, 'setState'> {
+  constructor(getValue: (prev?: NoInfer<T>) => T)
+  get state(): T
+  get(): T
+  subscribe(observerOrFn: Observer<T> | ((value: T) => void)): Subscription
+}
+```
+
+The `ReadonlyStore` class is a reactive container for computed/derived state. It automatically recomputes its value when dependencies change. Unlike `Store`, it cannot be directly updated with `setState()`. It's created by calling `createStore()` with a getter function.
+
+## Constructor
+
+<ParamField path="getValue" type="(prev?: NoInfer<T>) => T" required>
+  A function that computes the store's value. This function is called to compute the initial value and whenever dependencies change.
+  
+  - `prev` - The previous computed value (optional)
+</ParamField>
+
+## Properties
+
+### state
+
+```typescript
+get state(): T
+```
+
+Gets the current computed state value. If the value is stale (dependencies have changed), it will be recomputed automatically.
+
+<ResponseField name="state" type="T">
+  The current computed state value.
+</ResponseField>
+
+## Methods
+
+### get()
+
+```typescript
+get(): T
+```
+
+Gets the current computed state value. This is an alias for the `state` property.
+
+<ResponseField name="return" type="T">
+  The current computed state value.
+</ResponseField>
+
+### subscribe()
+
+```typescript
+subscribe(observerOrFn: Observer<T> | ((value: T) => void)): Subscription
+```
+
+Subscribes to state changes. The callback is invoked whenever the computed value changes.
+
+<ParamField path="observerOrFn" type="Observer<T> | ((value: T) => void)" required>
+  Either a callback function that receives the new computed value, or an observer object with `next`, `error`, and `complete` methods.
+</ParamField>
+
+<ResponseField name="Subscription" type="{ unsubscribe: () => void }">
+  A subscription object with an `unsubscribe()` method to stop receiving updates.
+</ResponseField>
+
+## Examples
+
+### Basic Computed Store
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const countStore = createStore(0)
+
+// Create a computed store that doubles the count
+const doubledStore = createStore(() => {
+  return countStore.state * 2
+})
+
+console.log(doubledStore.state) // 0
+
+countStore.setState((prev) => prev + 5)
+console.log(doubledStore.state) // 10
+
+// This would cause a TypeScript error:
+// doubledStore.setState() // Error: setState does not exist
+```
+
+### Deriving from Multiple Stores
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const firstNameStore = createStore('John')
+const lastNameStore = createStore('Doe')
+const ageStore = createStore(30)
+
+// Computed store that combines multiple sources
+const userSummaryStore = createStore(() => {
+  const firstName = firstNameStore.state
+  const lastName = lastNameStore.state
+  const age = ageStore.state
+  
+  return `${firstName} ${lastName}, age ${age}`
+})
+
+console.log(userSummaryStore.state)
+// 'John Doe, age 30'
+
+firstNameStore.setState(() => 'Jane')
+console.log(userSummaryStore.state)
+// 'Jane Doe, age 30'
+```
+
+### Filtering and Transforming Data
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
+const todosStore = createStore<Todo[]>([
+  { id: 1, text: 'Learn TanStack Store', completed: false },
+  { id: 2, text: 'Build an app', completed: false },
+  { id: 3, text: 'Ship it', completed: true }
+])
+
+// Computed store for active todos
+const activeTodosStore = createStore(() => {
+  return todosStore.state.filter(todo => !todo.completed)
+})
+
+// Computed store for completed count
+const completedCountStore = createStore(() => {
+  return todosStore.state.filter(todo => todo.completed).length
+})
+
+console.log(activeTodosStore.state.length) // 2
+console.log(completedCountStore.state) // 1
+```
+
+### Subscribing to Computed Values
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const priceStore = createStore(100)
+const quantityStore = createStore(2)
+
+const totalStore = createStore(() => {
+  return priceStore.state * quantityStore.state
+})
+
+// Subscribe to total changes
+const subscription = totalStore.subscribe((total) => {
+  console.log('Total:', total)
+})
+
+priceStore.setState(() => 150)
+// Logs: Total: 300
+
+quantityStore.setState(() => 3)
+// Logs: Total: 450
+
+subscription.unsubscribe()
+```
+
+### Complex Computed State
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+interface Product {
+  id: number
+  name: string
+  price: number
+  category: string
+}
+
+const productsStore = createStore<Product[]>([
+  { id: 1, name: 'Laptop', price: 999, category: 'Electronics' },
+  { id: 2, name: 'Mouse', price: 29, category: 'Electronics' },
+  { id: 3, name: 'Desk', price: 299, category: 'Furniture' }
+])
+
+const filterStore = createStore({ category: '', maxPrice: Infinity })
+
+// Computed store with complex filtering logic
+const filteredProductsStore = createStore(() => {
+  const products = productsStore.state
+  const filter = filterStore.state
+  
+  return products.filter(product => {
+    const matchesCategory = !filter.category || product.category === filter.category
+    const matchesPrice = product.price <= filter.maxPrice
+    return matchesCategory && matchesPrice
+  })
+})
+
+// Computed store for statistics
+const statsStore = createStore(() => {
+  const filtered = filteredProductsStore.state
+  return {
+    count: filtered.length,
+    avgPrice: filtered.reduce((sum, p) => sum + p.price, 0) / filtered.length || 0,
+    total: filtered.reduce((sum, p) => sum + p.price, 0)
+  }
+})
+
+filterStore.setState(() => ({ category: 'Electronics', maxPrice: 500 }))
+console.log(statsStore.state)
+// { count: 1, avgPrice: 29, total: 29 }
+```
+
+### Using with Previous Value
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const valueStore = createStore(0)
+
+// Track value changes
+const changeStore = createStore((prev) => {
+  const current = valueStore.state
+  const previous = prev?.value ?? 0
+  
+  return {
+    value: current,
+    delta: current - previous,
+    increased: current > previous
+  }
+})
+
+valueStore.setState(() => 10)
+console.log(changeStore.state)
+// { value: 10, delta: 10, increased: true }
+
+valueStore.setState(() => 5)
+console.log(changeStore.state)
+// { value: 5, delta: -5, increased: false }
+```
+
+## Key Differences from Store
+
+<Card title="ReadonlyStore vs Store" icon="code-compare">
+  - **ReadonlyStore**: Created with a getter function, automatically recomputes when dependencies change, no `setState()` method
+  - **Store**: Created with an initial value, manually updated with `setState()`, mutable
+</Card>
+
+## Related APIs
+
+- [createStore](/api/core/create-store) - Factory function to create stores
+- [Store](/api/core/store-class) - Mutable variant with setState
+- [ReadonlyAtom](/api/core/create-atom) - Lower-level computed primitive

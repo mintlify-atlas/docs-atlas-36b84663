@@ -1,0 +1,562 @@
+---
+title: "Batching"
+description: "Optimize performance by batching multiple state updates into a single notification"
+---
+
+## What is Batching?
+
+Batching is a performance optimization technique that allows you to group multiple state updates together so that subscribers are only notified once, after all updates are complete. This is especially useful when you need to update multiple stores or make several updates to the same store in quick succession.
+
+Without batching, each update would trigger all subscribers immediately, potentially causing unnecessary re-renders, computations, or side effects.
+
+## The Problem Batching Solves
+
+Consider this scenario without batching:
+
+```typescript
+const firstNameStore = createStore('John')
+const lastNameStore = createStore('Doe')
+
+const fullNameStore = createStore(() => {
+  console.log('Computing full name...')
+  return `${firstNameStore.state} ${lastNameStore.state}`
+})
+
+fullNameStore.subscribe((name) => {
+  console.log('Full name:', name)
+})
+
+// This triggers two computations and two subscription calls
+firstNameStore.setState(() => 'Jane')
+// Logs:
+// "Computing full name..."
+// "Full name: Jane Doe"
+
+lastNameStore.setState(() => 'Smith')
+// Logs:
+// "Computing full name..."
+// "Full name: Jane Smith"
+```
+
+With batching, you can make both updates trigger only one notification:
+
+```typescript
+import { batch } from '@tanstack/store'
+
+batch(() => {
+  firstNameStore.setState(() => 'Jane')
+  lastNameStore.setState(() => 'Smith')
+})
+// Logs only once:
+// "Computing full name..."
+// "Full name: Jane Smith"
+```
+
+## Using the batch Function
+
+### Basic Usage
+
+```typescript
+import { batch } from '@tanstack/store'
+
+const store1 = createStore(0)
+const store2 = createStore(0)
+const store3 = createStore(0)
+
+const sumStore = createStore(() => {
+  return store1.state + store2.state + store3.state
+})
+
+sumStore.subscribe((sum) => {
+  console.log('Sum:', sum)
+})
+
+// Without batching - triggers 3 times
+store1.setState(() => 1) // Logs: "Sum: 1"
+store2.setState(() => 2) // Logs: "Sum: 3"
+store3.setState(() => 3) // Logs: "Sum: 6"
+
+// With batching - triggers once
+batch(() => {
+  store1.setState(() => 10)
+  store2.setState(() => 20)
+  store3.setState(() => 30)
+}) // Logs: "Sum: 60" (only once)
+```
+
+### API Signature
+
+```typescript
+function batch(fn: () => void): void
+```
+
+The `batch` function takes a callback that performs multiple updates. All subscriptions are deferred until the callback completes.
+
+## How Batching Works
+
+From batch.ts:4-12:
+
+```typescript
+export function batch(fn: () => void) {
+  try {
+    startBatch()
+    fn()
+  } finally {
+    endBatch()
+    flush()
+  }
+}
+```
+
+1. **Start Batch**: Increments an internal batch depth counter
+2. **Execute Updates**: Runs your callback with all the updates
+3. **End Batch**: Decrements the batch depth counter
+4. **Flush**: If batch depth is 0, notifies all subscribers that were queued during the batch
+
+<Note>
+Batching uses a depth counter, so nested `batch()` calls work correctly. Notifications only fire when the outermost batch completes.
+</Note>
+
+## Practical Examples
+
+### Form Updates
+
+```typescript
+interface FormData {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+}
+
+const formStore = createStore<FormData>({
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+})
+
+const isFormValidStore = createStore(() => {
+  console.log('Validating form...')
+  const form = formStore.state
+  return Boolean(
+    form.firstName &&
+    form.lastName &&
+    form.email &&
+    form.phone
+  )
+})
+
+isFormValidStore.subscribe((isValid) => {
+  console.log('Form valid:', isValid)
+  submitButton.disabled = !isValid
+})
+
+// Without batching - validates and updates button 4 times
+function loadFormData(data: FormData) {
+  formStore.setState((prev) => ({ ...prev, firstName: data.firstName }))
+  formStore.setState((prev) => ({ ...prev, lastName: data.lastName }))
+  formStore.setState((prev) => ({ ...prev, email: data.email }))
+  formStore.setState((prev) => ({ ...prev, phone: data.phone }))
+}
+
+// With batching - validates and updates button once
+function loadFormDataBatched(data: FormData) {
+  batch(() => {
+    formStore.setState((prev) => ({ ...prev, firstName: data.firstName }))
+    formStore.setState((prev) => ({ ...prev, lastName: data.lastName }))
+    formStore.setState((prev) => ({ ...prev, email: data.email }))
+    formStore.setState((prev) => ({ ...prev, phone: data.phone }))
+  })
+}
+
+// Even better - single update
+function loadFormDataOptimal(data: FormData) {
+  formStore.setState(() => data)
+}
+```
+
+### Multiple Store Updates
+
+```typescript
+const userStore = createStore({ name: '', age: 0 })
+const settingsStore = createStore({ theme: 'light', notifications: false })
+const statusStore = createStore('idle')
+
+// Derived state that depends on all three
+const dashboardStore = createStore(() => {
+  console.log('Computing dashboard...')
+  return {
+    user: userStore.state,
+    settings: settingsStore.state,
+    status: statusStore.state,
+  }
+})
+
+dashboardStore.subscribe((data) => {
+  console.log('Dashboard updated')
+  updateUI(data)
+})
+
+// Initialize app state efficiently
+function initializeApp(data) {
+  batch(() => {
+    userStore.setState(() => data.user)
+    settingsStore.setState(() => data.settings)
+    statusStore.setState(() => 'ready')
+  })
+  // Only triggers dashboard computation once
+}
+```
+
+### Bulk Operations
+
+```typescript
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
+const todosStore = createStore<Todo[]>([])
+
+const statsStore = createStore(() => {
+  const todos = todosStore.state
+  return {
+    total: todos.length,
+    completed: todos.filter(t => t.completed).length,
+    pending: todos.filter(t => !t.completed).length,
+  }
+})
+
+statsStore.subscribe((stats) => {
+  console.log('Stats updated:', stats)
+  updateStatsDisplay(stats)
+})
+
+// Mark multiple todos as completed
+function completeMultiple(ids: number[]) {
+  batch(() => {
+    ids.forEach(id => {
+      todosStore.setState(todos =>
+        todos.map(todo =>
+          todo.id === id ? { ...todo, completed: true } : todo
+        )
+      )
+    })
+  })
+  // Stats only update once, not once per todo
+}
+
+// Better approach - single update
+function completeMultipleOptimal(ids: number[]) {
+  todosStore.setState(todos =>
+    todos.map(todo =>
+      ids.includes(todo.id) ? { ...todo, completed: true } : todo
+    )
+  )
+}
+```
+
+### Animation Frame Updates
+
+```typescript
+const positionXStore = createStore(0)
+const positionYStore = createStore(0)
+const velocityXStore = createStore(0)
+const velocityYStore = createStore(0)
+
+const spriteDataStore = createStore(() => ({
+  x: positionXStore.state,
+  y: positionYStore.state,
+  vx: velocityXStore.state,
+  vy: velocityYStore.state,
+}))
+
+spriteDataStore.subscribe((data) => {
+  renderSprite(data)
+})
+
+function updatePhysics(deltaTime: number) {
+  batch(() => {
+    // Update position
+    positionXStore.setState(x => x + velocityXStore.state * deltaTime)
+    positionYStore.setState(y => y + velocityYStore.state * deltaTime)
+    
+    // Apply gravity
+    velocityYStore.setState(vy => vy + 9.8 * deltaTime)
+    
+    // Apply friction
+    velocityXStore.setState(vx => vx * 0.99)
+  })
+  // Only renders once per frame, not 4 times
+}
+
+function gameLoop() {
+  const now = performance.now()
+  const deltaTime = (now - lastTime) / 1000
+  lastTime = now
+  
+  updatePhysics(deltaTime)
+  
+  requestAnimationFrame(gameLoop)
+}
+```
+
+### Data Sync
+
+```typescript
+interface ServerData {
+  users: User[]
+  posts: Post[]
+  comments: Comment[]
+  metadata: Metadata
+}
+
+const usersStore = createStore<User[]>([])
+const postsStore = createStore<Post[]>([])
+const commentsStore = createStore<Comment[]>([])
+const metadataStore = createStore<Metadata>({})
+
+const isLoadingStore = createStore(false)
+
+// Sync from server
+async function syncFromServer() {
+  isLoadingStore.setState(() => true)
+  
+  try {
+    const data = await fetch('/api/sync').then(r => r.json())
+    
+    // Update all stores atomically
+    batch(() => {
+      usersStore.setState(() => data.users)
+      postsStore.setState(() => data.posts)
+      commentsStore.setState(() => data.comments)
+      metadataStore.setState(() => data.metadata)
+      isLoadingStore.setState(() => false)
+    })
+    // UI only updates once with all new data
+  } catch (error) {
+    isLoadingStore.setState(() => false)
+  }
+}
+```
+
+### Undo/Redo
+
+```typescript
+interface EditorState {
+  content: string
+  cursor: number
+  selection: { start: number; end: number }
+}
+
+const editorStore = createStore<EditorState>({
+  content: '',
+  cursor: 0,
+  selection: { start: 0, end: 0 },
+})
+
+const historyStore = createStore<EditorState[]>([])
+const historyIndexStore = createStore(-1)
+
+function restoreState(state: EditorState) {
+  batch(() => {
+    editorStore.setState(() => state)
+    // Any derived stores only recompute once
+  })
+}
+
+function undo() {
+  const index = historyIndexStore.state
+  if (index > 0) {
+    const history = historyStore.state
+    batch(() => {
+      historyIndexStore.setState(() => index - 1)
+      restoreState(history[index - 1])
+    })
+  }
+}
+
+function redo() {
+  const index = historyIndexStore.state
+  const history = historyStore.state
+  if (index < history.length - 1) {
+    batch(() => {
+      historyIndexStore.setState(() => index + 1)
+      restoreState(history[index + 1])
+    })
+  }
+}
+```
+
+## Nested Batching
+
+Batching supports nesting. Notifications only fire when the outermost batch completes:
+
+```typescript
+const store = createStore(0)
+
+store.subscribe((value) => {
+  console.log('Value:', value)
+})
+
+batch(() => {
+  store.setState(() => 1)
+  
+  batch(() => {
+    store.setState(() => 2)
+    store.setState(() => 3)
+  })
+  
+  store.setState(() => 4)
+})
+// Only logs once: "Value: 4"
+```
+
+## Performance Considerations
+
+<CardGroup cols={2}>
+
+<Card title="When to Use Batching" icon="gauge-high">
+  - Multiple related updates
+  - Bulk operations
+  - Animation loops
+  - Data synchronization
+  - Form initialization
+</Card>
+
+<Card title="When Not to Use Batching" icon="circle-xmark">
+  - Single updates
+  - When you need immediate feedback
+  - Unrelated updates
+  - Simple derived state
+</Card>
+
+</CardGroup>
+
+### Measuring Impact
+
+```typescript
+const store1 = createStore(0)
+const store2 = createStore(0)
+
+let computeCount = 0
+const derivedStore = createStore(() => {
+  computeCount++
+  return store1.state + store2.state
+})
+
+derivedStore.subscribe(() => {})
+
+// Without batching
+computeCount = 0
+store1.setState(() => 1)
+store2.setState(() => 2)
+console.log('Computations:', computeCount) // 2
+
+// With batching
+computeCount = 0
+batch(() => {
+  store1.setState(() => 3)
+  store2.setState(() => 4)
+})
+console.log('Computations:', computeCount) // 1
+```
+
+## Best Practices
+
+<AccordionGroup>
+
+<Accordion title="Batch Related Updates">
+Group updates that logically belong together:
+
+```typescript
+// Good - related updates batched
+batch(() => {
+  userStore.setState(() => newUser)
+  settingsStore.setState(() => newSettings)
+  sessionStore.setState(() => newSession)
+})
+
+// Bad - unrelated updates batched
+batch(() => {
+  userStore.setState(() => newUser)
+  randomUnrelatedStore.setState(() => data)
+})
+```
+</Accordion>
+
+<Accordion title="Consider Single Updates First">
+Before batching multiple `setState` calls, consider if you can do it in one update:
+
+```typescript
+// Okay
+batch(() => {
+  formStore.setState(prev => ({ ...prev, firstName: 'John' }))
+  formStore.setState(prev => ({ ...prev, lastName: 'Doe' }))
+})
+
+// Better
+formStore.setState(prev => ({
+  ...prev,
+  firstName: 'John',
+  lastName: 'Doe',
+}))
+```
+</Accordion>
+
+<Accordion title="Don't Over-Batch">
+Batching has a small overhead. Don't batch single updates:
+
+```typescript
+// Bad - unnecessary
+batch(() => {
+  store.setState(() => newValue)
+})
+
+// Good
+store.setState(() => newValue)
+```
+</Accordion>
+
+<Accordion title="Handle Errors Properly">
+The `batch` function uses try/finally to ensure cleanup. Errors will propagate:
+
+```typescript
+try {
+  batch(() => {
+    store1.setState(() => value1)
+    throw new Error('Something went wrong')
+    store2.setState(() => value2) // Never executes
+  })
+} catch (error) {
+  console.error('Batch failed:', error)
+  // store1 was updated, store2 was not
+}
+```
+</Accordion>
+
+</AccordionGroup>
+
+## Related Concepts
+
+<CardGroup cols={2}>
+
+<Card title="Stores" icon="database" href="/concepts/stores">
+  Learn about the store primitive
+</Card>
+
+<Card title="Atoms" icon="atom" href="/concepts/atoms">
+  Lower-level reactive primitives
+</Card>
+
+<Card title="Subscriptions" icon="bell" href="/concepts/subscriptions">
+  Understand how batching affects subscriptions
+</Card>
+
+<Card title="Derived Stores" icon="share-nodes" href="/concepts/derived-stores">
+  See how batching optimizes derived computations
+</Card>
+
+</CardGroup>

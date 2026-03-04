@@ -1,0 +1,296 @@
+---
+title: Installation
+description: Install TanStack Store for your framework with npm, yarn, or pnpm
+---
+
+# Installation
+
+TanStack Store provides a core package and framework-specific adapters. Install the adapter for your framework to get started.
+
+<Note>
+All TanStack Store packages require TypeScript 5.6+ for the best development experience.
+</Note>
+
+## Framework Adapters
+
+Choose the adapter for your framework:
+
+<Tabs>
+  <Tab title="React">
+    ### React
+
+    Install the React adapter which includes the core package:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/react-store
+    ```
+
+    ```bash yarn
+    yarn add @tanstack/react-store
+    ```
+
+    ```bash pnpm
+    pnpm add @tanstack/react-store
+    ```
+    </CodeGroup>
+
+    #### Requirements
+
+    - **React**: 16.8+ (React 18+ recommended)
+    - **React DOM**: 16.8+ (React 18+ recommended)
+
+    The React adapter is compatible with React 16.8+, 17, 18, and 19. It uses `useSyncExternalStore` for optimal concurrent rendering support.
+
+    <Info>
+    TanStack Store for React is currently compatible with ReactDOM only. If you'd like to contribute a React Native adapter, please reach out on [Discord](https://discord.com/invite/WrRKjPJ).
+    </Info>
+
+    #### Peer Dependencies
+
+    The following peer dependencies are required:
+
+    ```json
+    {
+      "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+      "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+    }
+    ```
+  </Tab>
+
+  <Tab title="Vue">
+    ### Vue
+
+    Install the Vue adapter which includes the core package:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/vue-store
+    ```
+
+    ```bash yarn
+    yarn add @tanstack/vue-store
+    ```
+
+    ```bash pnpm
+    pnpm add @tanstack/vue-store
+    ```
+    </CodeGroup>
+
+    #### Requirements
+
+    - **Vue**: 2.5+ or 3.0+
+
+    TanStack Store supports both Vue 2 and Vue 3 through `vue-demi`.
+
+    #### Peer Dependencies
+
+    For Vue 2.x (below 2.7), you also need the Composition API plugin:
+
+    ```bash npm
+    npm install @vue/composition-api
+    ```
+
+    ```json
+    {
+      "vue": "^2.5.0 || ^3.0.0",
+      "@vue/composition-api": "^1.2.1" // Optional for Vue 2.7+
+    }
+    ```
+
+    <Info>
+    Vue 2.7+ has built-in Composition API support, so the plugin is not needed.
+    </Info>
+  </Tab>
+
+  <Tab title="Solid">
+    ### Solid
+
+    Install the Solid adapter which includes the core package:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/solid-store
+    ```
+
+    ```bash yarn
+    yarn add @tanstack/solid-store
+    ```
+
+    ```bash pnpm
+    pnpm add @tanstack/solid-store
+    ```
+    </CodeGroup>
+
+    #### Requirements
+
+    - **Solid**: 1.6+
+
+    TanStack Store is compatible with Solid and SolidStart.
+
+    #### Peer Dependencies
+
+    ```json
+    {
+      "solid-js": "^1.6.0"
+    }
+    ```
+  </Tab>
+
+  <Tab title="Angular">
+    ### Angular
+
+    Install the Angular adapter which includes the core package:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/angular-store
+    ```
+
+    ```bash yarn
+    yarn add @tanstack/angular-store
+    ```
+
+    ```bash pnpm
+    pnpm add @tanstack/angular-store
+    ```
+    </CodeGroup>
+
+    #### Requirements
+
+    - **Angular**: 19+
+
+    <Warning>
+    The Angular adapter requires Angular 19 or later.
+    </Warning>
+  </Tab>
+
+  <Tab title="Svelte">
+    ### Svelte
+
+    Install the Svelte adapter which includes the core package:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/svelte-store
+    ```
+
+    ```bash yarn
+    yarn add @tanstack/svelte-store
+    ```
+
+    ```bash pnpm
+    pnpm add @tanstack/svelte-store
+    ```
+    </CodeGroup>
+
+    #### Requirements
+
+    - **Svelte**: 5+
+
+    TanStack Store is compatible with Svelte 5.
+  </Tab>
+
+  <Tab title="Preact">
+    ### Preact
+
+    Install the Preact adapter which includes the core package:
+
+    <CodeGroup>
+    ```bash npm
+    npm install @tanstack/preact-store
+    ```
+
+    ```bash yarn
+    yarn add @tanstack/preact-store
+    ```
+
+    ```bash pnpm
+    pnpm add @tanstack/preact-store
+    ```
+    </CodeGroup>
+
+    #### Requirements
+
+    - **Preact**: 10+
+
+    TanStack Store is compatible with Preact 10 and later.
+  </Tab>
+</Tabs>
+
+## Core Package Only
+
+If you want to use TanStack Store without a framework (vanilla JavaScript/TypeScript) or build your own adapter, install just the core package:
+
+<CodeGroup>
+```bash npm
+npm install @tanstack/store
+```
+
+```bash yarn
+yarn add @tanstack/store
+```
+
+```bash pnpm
+pnpm add @tanstack/store
+```
+</CodeGroup>
+
+The core package has zero dependencies and can be used in any JavaScript environment.
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+const store = createStore({ count: 0 })
+
+store.setState((prev) => ({ count: prev.count + 1 }))
+console.log(store.state.count) // 1
+```
+
+## TypeScript Configuration
+
+For the best TypeScript experience, ensure you're using TypeScript 5.6 or later. TanStack Store is tested against TypeScript 5.6, 5.7, 5.8, and 5.9.
+
+No additional TypeScript configuration is required. All packages include full type definitions.
+
+## Verify Installation
+
+After installation, verify everything works by creating a simple store:
+
+<CodeGroup>
+```typescript React
+import { Store } from '@tanstack/react-store'
+
+const store = new Store({ count: 0 })
+console.log('TanStack Store installed successfully!')
+```
+
+```typescript Vue
+import { Store } from '@tanstack/vue-store'
+
+const store = new Store({ count: 0 })
+console.log('TanStack Store installed successfully!')
+```
+
+```typescript Solid
+import { Store } from '@tanstack/solid-store'
+
+const store = new Store({ count: 0 })
+console.log('TanStack Store installed successfully!')
+```
+
+```typescript Vanilla
+import { createStore } from '@tanstack/store'
+
+const store = createStore({ count: 0 })
+console.log('TanStack Store installed successfully!')
+```
+</CodeGroup>
+
+## Next Steps
+
+Now that you have TanStack Store installed, let's build your first store:
+
+<Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+  Learn how to create and use stores in your application
+</Card>

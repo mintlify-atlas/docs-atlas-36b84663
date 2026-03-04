@@ -1,0 +1,285 @@
+---
+title: AtomOptions
+description: Configuration options for creating atoms
+---
+
+# AtomOptions
+
+The `AtomOptions<T>` type defines configuration options that can be passed when creating an atom to customize its behavior.
+
+## Type Definition
+
+```typescript
+interface AtomOptions<T> {
+  compare?: (prev: T, next: T) => boolean
+}
+```
+
+## Properties
+
+### `compare`
+
+A custom comparison function to determine if the atom's value has changed. This function is called when setting a new value to decide whether subscribers should be notified.
+
+**Type:**
+```typescript
+(prev: T, next: T) => boolean
+```
+
+**Optional:** Yes
+
+**Default behavior:** If not provided, atoms use reference equality (`===`) to compare values.
+
+**Returns:**
+- `true` if the values are considered equal (no change, don't notify subscribers)
+- `false` if the values are different (notify subscribers)
+
+## Usage Examples
+
+### Default comparison (reference equality)
+
+```typescript
+import { atom } from '@tanstack/store'
+
+// Without custom compare, uses === comparison
+const counterAtom = atom(0)
+
+counterAtom.subscribe((value) => {
+  console.log('Counter changed:', value)
+})
+
+counterAtom.set(0) // No log - same value
+counterAtom.set(1) // Logs: "Counter changed: 1"
+```
+
+### Custom deep equality comparison
+
+```typescript
+import { atom } from '@tanstack/store'
+import { isEqual } from 'lodash'
+
+interface User {
+  name: string
+  age: number
+}
+
+const userAtom = atom<User>(
+  { name: 'Alice', age: 25 },
+  {
+    compare: (prev, next) => isEqual(prev, next)
+  }
+)
+
+userAtom.subscribe((user) => {
+  console.log('User changed:', user)
+})
+
+// Even though it's a new object, deep equality prevents notification
+userAtom.set({ name: 'Alice', age: 25 }) // No log - deeply equal
+
+// Different values trigger notification
+userAtom.set({ name: 'Alice', age: 26 })
+// Logs: "User changed: { name: 'Alice', age: 26 }"
+```
+
+### Shallow comparison for objects
+
+```typescript
+import { atom } from '@tanstack/store'
+
+function shallowEqual<T extends Record<string, any>>(
+  prev: T,
+  next: T
+): boolean {
+  const prevKeys = Object.keys(prev)
+  const nextKeys = Object.keys(next)
+
+  if (prevKeys.length !== nextKeys.length) return false
+
+  return prevKeys.every((key) => prev[key] === next[key])
+}
+
+interface Settings {
+  theme: 'light' | 'dark'
+  fontSize: number
+}
+
+const settingsAtom = atom<Settings>(
+  { theme: 'light', fontSize: 14 },
+  {
+    compare: shallowEqual
+  }
+)
+
+settingsAtom.subscribe((settings) => {
+  console.log('Settings changed:', settings)
+})
+
+// Shallow equal - no notification
+settingsAtom.set({ theme: 'light', fontSize: 14 })
+
+// Different - notification
+settingsAtom.set({ theme: 'dark', fontSize: 14 })
+// Logs: "Settings changed: { theme: 'dark', fontSize: 14 }"
+```
+
+### Numeric tolerance comparison
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const temperatureAtom = atom(20.0, {
+  compare: (prev, next) => Math.abs(prev - next) < 0.1
+})
+
+temperatureAtom.subscribe((temp) => {
+  console.log('Temperature changed:', temp)
+})
+
+temperatureAtom.set(20.05) // No log - within tolerance
+temperatureAtom.set(20.5)  // Logs: "Temperature changed: 20.5"
+```
+
+### Custom comparison for arrays
+
+```typescript
+import { atom } from '@tanstack/store'
+
+function arrayEqual<T>(prev: T[], next: T[]): boolean {
+  if (prev.length !== next.length) return false
+  return prev.every((item, index) => item === next[index])
+}
+
+const tagsAtom = atom<string[]>(['react', 'typescript'], {
+  compare: arrayEqual
+})
+
+tagsAtom.subscribe((tags) => {
+  console.log('Tags changed:', tags)
+})
+
+// Same array content - no notification
+tagsAtom.set(['react', 'typescript'])
+
+// Different content - notification
+tagsAtom.set(['react', 'typescript', 'vite'])
+// Logs: "Tags changed: ['react', 'typescript', 'vite']"
+```
+
+### Always notify (no comparison)
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const eventAtom = atom<string>('', {
+  compare: () => false // Always return false = always different
+})
+
+eventAtom.subscribe((event) => {
+  console.log('Event triggered:', event)
+})
+
+eventAtom.set('click') // Logs: "Event triggered: click"
+eventAtom.set('click') // Logs again: "Event triggered: click"
+```
+
+### Conditional comparison logic
+
+```typescript
+import { atom } from '@tanstack/store'
+
+interface Task {
+  id: number
+  title: string
+  completed: boolean
+  metadata?: Record<string, any>
+}
+
+const taskAtom = atom<Task>(
+  { id: 1, title: 'Learn TanStack Store', completed: false },
+  {
+    compare: (prev, next) => {
+      // Only compare important fields, ignore metadata
+      return (
+        prev.id === next.id &&
+        prev.title === next.title &&
+        prev.completed === next.completed
+      )
+    }
+  }
+)
+
+taskAtom.subscribe((task) => {
+  console.log('Task changed:', task)
+})
+
+// Metadata change doesn't trigger notification
+taskAtom.set({
+  id: 1,
+  title: 'Learn TanStack Store',
+  completed: false,
+  metadata: { priority: 'high' }
+})
+// No log
+
+// Important field change triggers notification
+taskAtom.set({
+  id: 1,
+  title: 'Learn TanStack Store',
+  completed: true,
+  metadata: { priority: 'high' }
+})
+// Logs: "Task changed: { ... completed: true ... }"
+```
+
+### Performance optimization with compare
+
+```typescript
+import { atom } from '@tanstack/store'
+
+interface LargeDataset {
+  id: string
+  data: number[]
+}
+
+const datasetAtom = atom<LargeDataset>(
+  { id: '1', data: [] },
+  {
+    // Only compare ID to avoid expensive deep array comparison
+    compare: (prev, next) => prev.id === next.id
+  }
+)
+
+datasetAtom.subscribe((dataset) => {
+  console.log('Dataset changed, ID:', dataset.id)
+})
+
+// Same ID - no notification, even though data array is different
+datasetAtom.set({ id: '1', data: [1, 2, 3] })
+
+// Different ID - notification
+datasetAtom.set({ id: '2', data: [1, 2, 3] })
+// Logs: "Dataset changed, ID: 2"
+```
+
+## When to Use Custom Comparison
+
+Use custom comparison when:
+
+1. **Object values**: You store objects and want to compare by content, not reference
+2. **Performance**: You want to avoid unnecessary re-renders or updates
+3. **Tolerance**: You need approximate equality (e.g., floating-point numbers)
+4. **Partial comparison**: Only certain fields matter for determining changes
+5. **Always notify**: You want every `set` call to notify subscribers regardless of value
+
+## Best Practices
+
+1. **Keep it fast**: Comparison functions are called on every `set`, so keep them efficient
+2. **Be consistent**: Ensure your comparison logic is symmetric and transitive
+3. **Consider immutability**: If you use immutable updates, default reference equality might be sufficient
+4. **Document behavior**: If using custom comparison, document why and how it works
+
+## Related Types
+
+- [Atom](/api/types/atom) - The writable atom type that accepts options
+- [ReadonlyAtom](/api/types/readonly-atom) - Read-only atoms also support comparison options

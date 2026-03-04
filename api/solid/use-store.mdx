@@ -1,0 +1,179 @@
+---
+title: useStore
+description: Solid.js primitive for subscribing to TanStack Store state
+---
+
+## Reference
+
+### `useStore`
+
+```tsx
+function useStore<TState, TSelected = NoInfer<TState>>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: NoInfer<TState>) => TSelected,
+  options?: UseStoreOptions<TSelected>
+): Accessor<TSelected>
+```
+
+A Solid.js primitive that subscribes to a TanStack Store atom and returns a signal accessor. The signal will update when the selected state changes according to the equality function.
+
+<ParamField path="store" type="Atom<TState> | ReadonlyAtom<TState>">
+  The store atom to subscribe to.
+</ParamField>
+
+<ParamField path="selector" type="(state: TState) => TSelected" default="(d) => d">
+  Optional function that selects a slice of state from the atom. Defaults to returning the entire state.
+</ParamField>
+
+<ParamField path="options" type="UseStoreOptions<TSelected>">
+  Optional configuration object.
+  
+  <Expandable title="properties">
+    <ResponseField name="equal" type="(a: TSelected, b: TSelected) => boolean" default="shallow">
+      Equality function to determine if the selected state has changed. Defaults to `shallow` comparison.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="Accessor<TSelected>" type="Accessor<TSelected>">
+  A Solid.js signal accessor function that returns the selected state value.
+</ResponseField>
+
+## Usage
+
+### Basic Usage
+
+```tsx
+import { useStore } from '@tanstack/solid-store'
+import { store } from './store'
+
+function Counter() {
+  const count = useStore(store, (state) => state.count)
+
+  return <div>Count: {count()}</div>
+}
+```
+
+### Selecting Multiple Values
+
+```tsx
+import { useStore } from '@tanstack/solid-store'
+import { store } from './store'
+
+function UserProfile() {
+  const user = useStore(store, (state) => ({
+    name: state.user.name,
+    email: state.user.email,
+    avatar: state.user.avatar
+  }))
+
+  return (
+    <div>
+      <h2>{user().name}</h2>
+      <p>{user().email}</p>
+      <img src={user().avatar} />
+    </div>
+  )
+}
+```
+
+### Custom Equality Function
+
+```tsx
+import { useStore } from '@tanstack/solid-store'
+import { store } from './store'
+
+// Only update when count changes by more than 10
+const customEqual = (a, b) => Math.abs(a - b) < 10
+
+function ApproximateCounter() {
+  const count = useStore(
+    store,
+    (state) => state.count,
+    { equal: customEqual }
+  )
+
+  return <div>Count (±10): {count()}</div>
+}
+```
+
+### Using Entire State
+
+```tsx
+import { useStore } from '@tanstack/solid-store'
+import { store } from './store'
+
+function AppState() {
+  const state = useStore(store)
+
+  return (
+    <div>
+      <p>Count: {state().count}</p>
+      <p>Name: {state().name}</p>
+      <p>Active: {state().isActive ? 'Yes' : 'No'}</p>
+    </div>
+  )
+}
+```
+
+### With Derived State
+
+```tsx
+import { createMemo } from 'solid-js'
+import { useStore } from '@tanstack/solid-store'
+import { store } from './store'
+
+function TodoStats() {
+  const todos = useStore(store, (state) => state.todos)
+  
+  const stats = createMemo(() => {
+    const all = todos()
+    return {
+      total: all.length,
+      completed: all.filter(t => t.done).length,
+      pending: all.filter(t => !t.done).length
+    }
+  })
+
+  return (
+    <div>
+      <p>Total: {stats().total}</p>
+      <p>Completed: {stats().completed}</p>
+      <p>Pending: {stats().pending}</p>
+    </div>
+  )
+}
+```
+
+### With Show Component
+
+```tsx
+import { Show } from 'solid-js'
+import { useStore } from '@tanstack/solid-store'
+import { store } from './store'
+
+function ConditionalContent() {
+  const isLoggedIn = useStore(store, (state) => state.isLoggedIn)
+  const user = useStore(store, (state) => state.user)
+
+  return (
+    <Show
+      when={isLoggedIn()}
+      fallback={<div>Please log in</div>}
+    >
+      <div>Welcome, {user().name}!</div>
+    </Show>
+  )
+}
+```
+
+## Notes
+
+- Returns a Solid.js **signal accessor** - call it as a function to get the value
+- Uses `createSignal` internally for fine-grained reactivity
+- Automatically cleans up subscriptions using `onCleanup`
+- Defaults to `shallow` equality comparison for optimal performance
+- The selector is evaluated immediately on creation and on each update
+- Integrates seamlessly with Solid's reactive primitives like `createMemo`, `createEffect`, etc.

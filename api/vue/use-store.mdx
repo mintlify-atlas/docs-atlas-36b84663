@@ -1,0 +1,154 @@
+---
+title: useStore
+description: Vue composable for subscribing to TanStack Store state
+---
+
+## Reference
+
+### `useStore`
+
+```ts
+function useStore<TState, TSelected = NoInfer<TState>>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: NoInfer<TState>) => TSelected,
+  options?: UseStoreOptions<TSelected>
+): Readonly<Ref<TSelected>>
+```
+
+A Vue composable that subscribes to a TanStack Store atom and returns a readonly ref. The ref will update when the selected state changes according to the equality function.
+
+<ParamField path="store" type="Atom<TState> | ReadonlyAtom<TState>">
+  The store atom to subscribe to.
+</ParamField>
+
+<ParamField path="selector" type="(state: TState) => TSelected" default="(d) => d">
+  Optional function that selects a slice of state from the atom. Defaults to returning the entire state.
+</ParamField>
+
+<ParamField path="options" type="UseStoreOptions<TSelected>">
+  Optional configuration object.
+  
+  <Expandable title="properties">
+    <ResponseField name="equal" type="(a: TSelected, b: TSelected) => boolean" default="shallow">
+      Equality function to determine if the selected state has changed. Defaults to `shallow` comparison.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="Readonly<Ref<TSelected>>" type="Readonly<Ref<TSelected>>">
+  A readonly Vue ref containing the selected state value.
+</ResponseField>
+
+## Usage
+
+### Basic Usage
+
+```vue
+<script setup>
+import { useStore } from '@tanstack/vue-store'
+import { store } from './store'
+
+const count = useStore(store, (state) => state.count)
+</script>
+
+<template>
+  <div>Count: {{ count }}</div>
+</template>
+```
+
+### Selecting Multiple Values
+
+```vue
+<script setup>
+import { useStore } from '@tanstack/vue-store'
+import { store } from './store'
+
+const user = useStore(store, (state) => ({
+  name: state.user.name,
+  email: state.user.email,
+  role: state.user.role
+}))
+</script>
+
+<template>
+  <div>
+    <h2>{{ user.name }}</h2>
+    <p>{{ user.email }}</p>
+    <span>{{ user.role }}</span>
+  </div>
+</template>
+```
+
+### Custom Equality Function
+
+```vue
+<script setup>
+import { useStore } from '@tanstack/vue-store'
+import { store } from './store'
+
+// Custom deep comparison
+const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
+const settings = useStore(
+  store,
+  (state) => state.settings,
+  { equal: deepEqual }
+)
+</script>
+
+<template>
+  <div>{{ settings }}</div>
+</template>
+```
+
+### Using Entire State
+
+```vue
+<script setup>
+import { useStore } from '@tanstack/vue-store'
+import { store } from './store'
+
+// No selector - returns entire state
+const state = useStore(store)
+</script>
+
+<template>
+  <div>
+    <p>Count: {{ state.count }}</p>
+    <p>Name: {{ state.name }}</p>
+  </div>
+</template>
+```
+
+### With Computed Properties
+
+```vue
+<script setup>
+import { computed } from 'vue'
+import { useStore } from '@tanstack/vue-store'
+import { store } from './store'
+
+const todos = useStore(store, (state) => state.todos)
+const completedCount = computed(() => 
+  todos.value.filter(t => t.completed).length
+)
+</script>
+
+<template>
+  <div>
+    <p>Total: {{ todos.length }}</p>
+    <p>Completed: {{ completedCount }}</p>
+  </div>
+</template>
+```
+
+## Notes
+
+- Returns a **readonly** ref - the value cannot be mutated directly
+- Uses Vue's `watch` API to track store subscriptions
+- Automatically cleans up subscriptions when the component is unmounted
+- Defaults to `shallow` equality comparison to optimize reactivity
+- Uses `toRaw` to unwrap Vue proxies before comparison
+- Compatible with both Vue 2 (via vue-demi) and Vue 3

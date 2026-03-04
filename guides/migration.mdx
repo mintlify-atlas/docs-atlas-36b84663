@@ -1,0 +1,537 @@
+---
+title: Migration Guide
+description: Migrate to the latest version of TanStack Store and learn about breaking changes
+---
+
+## Overview
+
+This guide helps you migrate between major versions of TanStack Store and understand breaking changes. TanStack Store follows semantic versioning, so major version bumps indicate breaking changes.
+
+## Migrating to v0.9.x
+
+### Breaking Changes in v0.9.0
+
+Version 0.9.0 introduced significant API changes to improve ergonomics and leverage a new reactive core based on [alien-signals](https://github.com/nicepkg/alien-signals).
+
+<Warning>
+  **Major API Changes**
+
+  Version 0.9.0 is a major rewrite with breaking changes. Review this section carefully before upgrading.
+</Warning>
+
+### Class Constructors → Factory Functions
+
+The biggest change is moving from class constructors to factory functions:
+
+```typescript
+// ❌ Old API (v0.8.x)
+import { Store, Derived, Effect } from '@tanstack/store'
+
+const store = new Store(initialValue)
+const derived = new Derived(() => store.state * 2)
+const effect = new Effect(() => {
+  console.log(store.state)
+})
+```
+
+```typescript
+// ✅ New API (v0.9.x)
+import { createStore } from '@tanstack/store'
+
+const store = createStore(initialValue)
+const derived = createStore(() => store.state * 2)
+const subscription = store.subscribe(() => {
+  console.log(store.state)
+})
+```
+
+### Derived Stores
+
+The `Derived` class has been replaced with computed `createStore()` calls:
+
+```typescript
+// ❌ Old API
+import { Store, Derived } from '@tanstack/store'
+
+const count = new Store(10)
+const doubled = new Derived(() => count.state * 2)
+```
+
+```typescript
+// ✅ New API
+import { createStore } from '@tanstack/store'
+
+const count = createStore(10)
+const doubled = createStore(() => count.state * 2)
+```
+
+<Tip>
+  The new API is simpler: if you pass a function to `createStore`, it creates a derived (readonly) store. If you pass a value, it creates a mutable store.
+</Tip>
+
+### Effects → Subscriptions
+
+The `Effect` class has been removed in favor of the `subscribe()` method:
+
+```typescript
+// ❌ Old API
+import { Store, Effect } from '@tanstack/store'
+
+const store = new Store(0)
+const effect = new Effect(() => {
+  console.log('Count:', store.state)
+})
+
+// Cleanup
+effect.destroy()
+```
+
+```typescript
+// ✅ New API
+import { createStore } from '@tanstack/store'
+
+const store = createStore(0)
+const { unsubscribe } = store.subscribe((value) => {
+  console.log('Count:', value)
+})
+
+// Cleanup
+unsubscribe()
+```
+
+### Type Changes
+
+Import types from the main package:
+
+```typescript
+// ❌ Old API
+import { Store, StoreInstance } from '@tanstack/store'
+
+const store: StoreInstance<number> = new Store(0)
+```
+
+```typescript
+// ✅ New API
+import { createStore, Store, ReadonlyStore } from '@tanstack/store'
+
+// Mutable store
+const store: Store<number> = createStore(0)
+
+// Readonly store
+const derived: ReadonlyStore<number> = createStore(() => store.state * 2)
+```
+
+### Observable Interop
+
+The subscription API now follows the Observable spec more closely:
+
+```typescript
+// ❌ Old API
+effect.subscribe({
+  onNext: (value) => console.log(value),
+  onError: (error) => console.error(error),
+})
+```
+
+```typescript
+// ✅ New API
+store.subscribe({
+  next: (value) => console.log(value),
+  error: (error) => console.error(error),
+  complete: () => console.log('complete'),
+})
+
+// Or use the simpler callback form
+store.subscribe((value) => console.log(value))
+```
+
+## Step-by-Step Migration
+
+<Steps>
+  <Step title="Update Dependencies">
+    Update your package.json to the latest version:
+
+    ```bash
+    npm install @tanstack/store@latest
+    # or
+    yarn add @tanstack/store@latest
+    # or
+    pnpm add @tanstack/store@latest
+    ```
+  </Step>
+
+  <Step title="Replace Store Constructor Calls">
+    Find and replace all `new Store()` with `createStore()`:
+
+    ```typescript
+    // Before
+    const store = new Store(initialValue)
+
+    // After
+    const store = createStore(initialValue)
+    ```
+  </Step>
+
+  <Step title="Replace Derived Stores">
+    Replace `new Derived()` with derived `createStore()`:
+
+    ```typescript
+    // Before
+    const derived = new Derived(() => store.state * 2)
+
+    // After
+    const derived = createStore(() => store.state * 2)
+    ```
+  </Step>
+
+  <Step title="Replace Effects with Subscriptions">
+    Replace `new Effect()` with `store.subscribe()`:
+
+    ```typescript
+    // Before
+    const effect = new Effect(() => {
+      console.log(store.state)
+    })
+    effect.destroy() // cleanup
+
+    // After
+    const { unsubscribe } = store.subscribe((value) => {
+      console.log(value)
+    })
+    unsubscribe() // cleanup
+    ```
+  </Step>
+
+  <Step title="Update Type Imports">
+    Update your type imports:
+
+    ```typescript
+    // Before
+    import { Store, StoreInstance } from '@tanstack/store'
+
+    // After
+    import { createStore, Store, ReadonlyStore } from '@tanstack/store'
+    ```
+  </Step>
+
+  <Step title="Test Your Application">
+    Run your test suite to ensure everything works:
+
+    ```bash
+    npm test
+    ```
+  </Step>
+</Steps>
+
+## Migrating from Other State Libraries
+
+### From Redux
+
+TanStack Store can replace Redux with less boilerplate:
+
+```typescript
+// Redux
+import { createStore } from 'redux'
+
+const reducer = (state = { count: 0 }, action) => {
+  switch (action.type) {
+    case 'INCREMENT':
+      return { count: state.count + 1 }
+    case 'DECREMENT':
+      return { count: state.count - 1 }
+    default:
+      return state
+  }
+}
+
+const store = createStore(reducer)
+store.dispatch({ type: 'INCREMENT' })
+```
+
+```typescript
+// TanStack Store
+import { createStore } from '@tanstack/store'
+
+const store = createStore({ count: 0 })
+
+const increment = () => {
+  store.setState((s) => ({ ...s, count: s.count + 1 }))
+}
+
+const decrement = () => {
+  store.setState((s) => ({ ...s, count: s.count - 1 }))
+}
+
+increment()
+```
+
+### From Zustand
+
+TanStack Store has a similar API to Zustand:
+
+```typescript
+// Zustand
+import { create } from 'zustand'
+
+const useStore = create((set) => ({
+  count: 0,
+  increment: () => set((state) => ({ count: state.count + 1 })),
+}))
+```
+
+```typescript
+// TanStack Store
+import { createStore } from '@tanstack/store'
+import { useStore } from '@tanstack/react-store'
+
+const store = createStore({ count: 0 })
+
+const increment = () => {
+  store.setState((s) => ({ ...s, count: s.count + 1 }))
+}
+
+function Component() {
+  const state = useStore(store)
+  return <div onClick={increment}>{state.count}</div>
+}
+```
+
+### From Jotai
+
+TanStack Store's atoms work similarly to Jotai:
+
+```typescript
+// Jotai
+import { atom, useAtom } from 'jotai'
+
+const countAtom = atom(0)
+const doubledAtom = atom((get) => get(countAtom) * 2)
+```
+
+```typescript
+// TanStack Store
+import { createAtom } from '@tanstack/store'
+import { useStore } from '@tanstack/react-store'
+
+const countAtom = createAtom(0)
+const doubledAtom = createAtom(() => countAtom.get() * 2)
+
+function Component() {
+  const count = useStore(countAtom)
+  const doubled = useStore(doubledAtom)
+  return <div>{count} × 2 = {doubled}</div>
+}
+```
+
+### From MobX
+
+TanStack Store provides similar reactivity with less boilerplate:
+
+```typescript
+// MobX
+import { makeObservable, observable, computed, action } from 'mobx'
+import { observer } from 'mobx-react-lite'
+
+class Store {
+  count = 0
+
+  constructor() {
+    makeObservable(this, {
+      count: observable,
+      doubled: computed,
+      increment: action,
+    })
+  }
+
+  get doubled() {
+    return this.count * 2
+  }
+
+  increment() {
+    this.count++
+  }
+}
+```
+
+```typescript
+// TanStack Store
+import { createStore } from '@tanstack/store'
+import { useStore } from '@tanstack/react-store'
+
+const countStore = createStore(0)
+const doubledStore = createStore(() => countStore.state * 2)
+
+const increment = () => {
+  countStore.setState((c) => c + 1)
+}
+
+function Component() {
+  const doubled = useStore(doubledStore)
+  return <button onClick={increment}>{doubled}</button>
+}
+```
+
+## Common Migration Issues
+
+### Issue: Cannot call setState on readonly store
+
+```typescript
+// ❌ Error: Property 'setState' does not exist
+const derived = createStore(() => source.state * 2)
+derived.setState(10)
+```
+
+**Solution**: Derived stores (created with a function) are readonly. Update the source store instead:
+
+```typescript
+// ✅ Correct: Update the source
+const source = createStore(5)
+const derived = createStore(() => source.state * 2)
+source.setState(10) // derived automatically updates to 20
+```
+
+### Issue: Subscriptions fire immediately
+
+Subscriptions fire once immediately on creation (this is intentional):
+
+```typescript
+let count = 0
+store.subscribe(() => {
+  count++ // Fires immediately, then on each update
+})
+console.log(count) // 1 (not 0!)
+```
+
+**Solution**: Handle the initial call if needed:
+
+```typescript
+let isFirst = true
+store.subscribe(() => {
+  if (isFirst) {
+    isFirst = false
+    return
+  }
+  // Handle subsequent updates
+})
+```
+
+### Issue: Type errors with generic stores
+
+```typescript
+// ❌ Type error
+const store = createStore<User>(null)
+```
+
+**Solution**: Use union types for nullable values:
+
+```typescript
+// ✅ Correct
+const store = createStore<User | null>(null)
+```
+
+## Framework-Specific Migration
+
+### React
+
+```bash
+npm install @tanstack/react-store
+```
+
+```typescript
+import { createStore } from '@tanstack/store'
+import { useStore } from '@tanstack/react-store'
+
+const store = createStore(0)
+
+function Component() {
+  const count = useStore(store)
+  return <div>{count}</div>
+}
+```
+
+### Vue
+
+```bash
+npm install @tanstack/vue-store
+```
+
+```typescript
+import { createStore } from '@tanstack/store'
+import { useStore } from '@tanstack/vue-store'
+
+const store = createStore(0)
+
+export default {
+  setup() {
+    const count = useStore(store)
+    return { count }
+  },
+}
+```
+
+### Svelte
+
+```bash
+npm install @tanstack/svelte-store
+```
+
+```typescript
+import { createStore } from '@tanstack/store'
+import { useStore } from '@tanstack/svelte-store'
+
+const store = createStore(0)
+const count = useStore(store)
+```
+
+```svelte
+<script>
+  import { count } from './store'
+</script>
+
+<div>{$count}</div>
+```
+
+## Version History
+
+### v0.9.1 (Latest)
+
+- **Fix**: Derived `createStore` now returns readonly store ([#278](https://github.com/TanStack/store/pull/278))
+
+### v0.9.0
+
+- **Breaking**: `new Store()` → `createStore()` ([#265](https://github.com/TanStack/store/pull/265))
+- **Breaking**: `new Derived()` → derived `createStore()`
+- **Breaking**: `new Effect()` → `store.subscribe()`
+- **New**: Uses [alien-signals](https://github.com/nicepkg/alien-signals) for efficient reactivity
+
+### v0.8.1
+
+- **Fix**: Issues with Derived Fields not Retriggering ([#274](https://github.com/TanStack/store/pull/274))
+
+## Getting Help
+
+If you encounter migration issues:
+
+<CardGroup cols={2}>
+  <Card title="GitHub Discussions" icon="github" href="https://github.com/TanStack/store/discussions">
+    Ask questions and get help from the community
+  </Card>
+
+  <Card title="GitHub Issues" icon="bug" href="https://github.com/TanStack/store/issues">
+    Report bugs or migration problems
+  </Card>
+
+  <Card title="Discord" icon="discord" href="https://tlinz.com/discord">
+    Join the TanStack Discord for real-time help
+  </Card>
+
+  <Card title="Twitter" icon="twitter" href="https://twitter.com/tanstack">
+    Follow @tanstack for updates
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+- Review [Type Safety](/guides/type-safety) for TypeScript best practices
+- Learn about [Performance](/guides/performance) optimization
+- Explore [Async Atoms](/guides/async-atoms) for async data

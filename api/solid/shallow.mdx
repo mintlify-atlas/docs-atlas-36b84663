@@ -1,0 +1,188 @@
+---
+title: shallow
+description: Shallow equality comparison function for Solid Store
+---
+
+## Reference
+
+### `shallow`
+
+```tsx
+function shallow<T>(objA: T, objB: T): boolean
+```
+
+A utility function that performs shallow equality comparison between two values. Used as the default equality function in `useStore` to prevent unnecessary signal updates.
+
+<ParamField path="objA" type="T">
+  The first value to compare.
+</ParamField>
+
+<ParamField path="objB" type="T">
+  The second value to compare.
+</ParamField>
+
+### Returns
+
+<ResponseField name="boolean" type="boolean">
+  `true` if the values are shallowly equal, `false` otherwise.
+</ResponseField>
+
+## Comparison Behavior
+
+The `shallow` function handles various data types:
+
+- **Reference equality**: Returns `true` if `Object.is(objA, objB)`
+- **Primitives/null**: Returns `false` if either value is not an object
+- **Map**: Compares size and all entries using `Object.is`
+- **Set**: Compares size and all values for presence
+- **Date**: Compares timestamps using `getTime()`
+- **Objects**: Compares own properties using `Object.is`
+
+## Usage
+
+### Default Behavior
+
+```tsx
+import { useStore } from '@tanstack/solid-store'
+import { store } from './store'
+
+// shallow is used by default
+function Component() {
+  const user = useStore(store, (state) => state.user)
+  return <div>{user().name}</div>
+}
+```
+
+### Explicit Usage
+
+```tsx
+import { useStore, shallow } from '@tanstack/solid-store'
+import { store } from './store'
+
+function UserCard() {
+  const user = useStore(
+    store,
+    (state) => ({
+      name: state.name,
+      email: state.email,
+      role: state.role
+    }),
+    { equal: shallow }
+  )
+
+  return (
+    <div>
+      <h2>{user().name}</h2>
+      <p>{user().email}</p>
+    </div>
+  )
+}
+```
+
+### Reference Equality
+
+```tsx
+import { useStore } from '@tanstack/solid-store'
+import { store } from './store'
+
+// Use strict reference equality for arrays
+function TodoList() {
+  const todos = useStore(
+    store,
+    (state) => state.todos,
+    { equal: (a, b) => a === b }
+  )
+
+  return (
+    <ul>
+      <For each={todos()}>
+        {(todo) => <li>{todo.text}</li>}
+      </For>
+    </ul>
+  )
+}
+```
+
+### Array Operations
+
+```tsx
+import { For } from 'solid-js'
+import { useStore, shallow } from '@tanstack/solid-store'
+import { store } from './store'
+
+function FilteredList() {
+  // Shallow comparison on filtered results
+  const activeItems = useStore(
+    store,
+    (state) => state.items.filter(item => item.active),
+    { equal: shallow }
+  )
+
+  return (
+    <ul>
+      <For each={activeItems()}>
+        {(item) => <li>{item.name}</li>}
+      </For>
+    </ul>
+  )
+}
+```
+
+### Object Slices
+
+```tsx
+import { useStore, shallow } from '@tanstack/solid-store'
+import { store } from './store'
+
+function Settings() {
+  const settings = useStore(
+    store,
+    (state) => ({
+      theme: state.settings.theme,
+      language: state.settings.language,
+      notifications: state.settings.notifications
+    }),
+    { equal: shallow }
+  )
+
+  return (
+    <div>
+      <p>Theme: {settings().theme}</p>
+      <p>Language: {settings().language}</p>
+    </div>
+  )
+}
+```
+
+### With createMemo
+
+```tsx
+import { createMemo } from 'solid-js'
+import { useStore, shallow } from '@tanstack/solid-store'
+import { store } from './store'
+
+function Dashboard() {
+  const stats = useStore(
+    store,
+    (state) => ({
+      users: state.users.length,
+      posts: state.posts.length
+    }),
+    { equal: shallow }
+  )
+
+  const total = createMemo(() => stats().users + stats().posts)
+
+  return <div>Total items: {total()}</div>
+}
+```
+
+## Notes
+
+- Used as the **default equality function** in `useStore`
+- Only compares **own properties** at the first level (shallow)
+- For nested objects, only the reference is compared
+- Handles special object types: Map, Set, Date
+- Optimized for Solid's fine-grained reactivity system
+- Prevents unnecessary signal updates when object contents are equivalent
+- More efficient than deep equality for most reactive scenarios

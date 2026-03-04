@@ -1,0 +1,533 @@
+---
+title: Angular
+description: Use TanStack Store in Angular applications
+---
+
+TanStack Store provides Angular support through the `@tanstack/angular-store` package, which integrates with Angular's modern signals-based reactivity system.
+
+## Installation
+
+Install the Angular adapter package:
+
+<CodeGroup>
+
+```bash npm
+npm install @tanstack/angular-store
+```
+
+```bash pnpm
+pnpm add @tanstack/angular-store
+```
+
+```bash yarn
+yarn add @tanstack/angular-store
+```
+
+```bash bun
+bun add @tanstack/angular-store
+```
+
+</CodeGroup>
+
+<Note>
+  The `@tanstack/angular-store` package re-exports everything from `@tanstack/store`, so you only need to install the Angular package.
+</Note>
+
+## Angular Version Requirements
+
+<Warning>
+  This package requires Angular 19+ as it uses the modern signals API including `linkedSignal` and `Signal`.
+</Warning>
+
+## Basic Usage
+
+The primary way to use TanStack Store in Angular is through the `injectStore` function:
+
+```typescript
+import { Component } from '@angular/core'
+import { createStore, injectStore } from '@tanstack/angular-store'
+
+// Create a store
+const counterStore = createStore({
+  count: 0,
+})
+
+@Component({
+  selector: 'app-counter',
+  standalone: true,
+  template: `
+    <div>
+      <p>Count: {{ count() }}</p>
+      <button (click)="increment()">Increment</button>
+    </div>
+  `,
+})
+export class CounterComponent {
+  // Inject the store - returns a Signal
+  count = injectStore(counterStore, (state) => state.count)
+
+  increment() {
+    counterStore.setState((prev) => ({ count: prev.count + 1 }))
+  }
+}
+```
+
+## The injectStore Function
+
+The `injectStore` function subscribes your component to store updates and returns an Angular Signal that automatically updates.
+
+### Signature
+
+```typescript
+function injectStore<TState, TSelected>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: TState) => TSelected,
+  options?: CreateSignalOptions<TSelected> & { injector?: Injector }
+): Signal<TSelected>
+```
+
+### Parameters
+
+- `store` - The store instance to subscribe to
+- `selector` - (Optional) A function that selects which part of the state you need. Defaults to returning the entire state
+- `options.equal` - (Optional) A custom equality function. Defaults to `shallow`
+- `options.injector` - (Optional) A custom injector. If not provided, must be called within an injection context
+
+### Return Value
+
+Returns a readonly Angular `Signal<TSelected>`. Call it like `count()` to get the current value.
+
+### Injection Context
+
+<Note>
+  `injectStore` must be called within an injection context (constructor, field initializer, or factory function) unless you provide a custom `injector`.
+</Note>
+
+```typescript
+import { Component, Injector, inject } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+
+@Component({
+  selector: 'app-example',
+  template: `<div>{{ value() }}</div>`,
+})
+export class ExampleComponent {
+  // ✅ Works - called in field initializer (injection context)
+  value = injectStore(myStore, (state) => state.value)
+
+  constructor() {
+    // ✅ Works - called in constructor (injection context)
+    const another = injectStore(myStore, (state) => state.other)
+  }
+
+  someMethod() {
+    // ❌ Error - not in injection context
+    // const value = injectStore(myStore, (state) => state.value)
+
+    // ✅ Works - provide injector explicitly
+    const injector = inject(Injector)
+    const value = injectStore(myStore, (state) => state.value, { injector })
+  }
+}
+```
+
+## Selector Optimization
+
+The selector function allows you to subscribe to only the parts of state you need:
+
+```typescript
+import { Component } from '@angular/core'
+import { createStore, injectStore } from '@tanstack/angular-store'
+
+const appStore = createStore({
+  user: { name: 'Alice', age: 30 },
+  settings: { theme: 'dark', notifications: true },
+})
+
+@Component({
+  selector: 'app-user-profile',
+  template: `<h1>Welcome, {{ userName() }}!</h1>`,
+})
+export class UserProfileComponent {
+  // Only updates when user.name changes
+  userName = injectStore(appStore, (state) => state.user.name)
+}
+
+@Component({
+  selector: 'app-settings',
+  template: `
+    <div>
+      <p>Theme: {{ settings().theme }}</p>
+      <p>Notifications: {{ settings().notifications ? 'On' : 'Off' }}</p>
+    </div>
+  `,
+})
+export class SettingsComponent {
+  // Only updates when settings change
+  settings = injectStore(appStore, (state) => state.settings)
+}
+```
+
+## Custom Equality Functions
+
+For complex state selections, provide a custom equality function:
+
+```typescript
+import { Component } from '@angular/core'
+import { createStore, injectStore } from '@tanstack/angular-store'
+
+const todoStore = createStore({
+  todos: [
+    { id: 1, text: 'Buy groceries', completed: false },
+    { id: 2, text: 'Walk the dog', completed: true },
+  ],
+})
+
+function deepEqual<T>(a: T, b: T): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+@Component({
+  selector: 'app-todo-list',
+  template: `
+    <ul>
+      @for (todo of activeTodos(); track todo.id) {
+        <li>{{ todo.text }}</li>
+      }
+    </ul>
+  `,
+})
+export class TodoListComponent {
+  // Use deep equality for array comparison
+  activeTodos = injectStore(
+    todoStore,
+    (state) => state.todos.filter((todo) => !todo.completed),
+    { equal: deepEqual }
+  )
+}
+```
+
+## Shallow Equality
+
+The package uses shallow equality by default for object comparisons:
+
+```typescript
+import { Component } from '@angular/core'
+import { createStore, injectStore } from '@tanstack/angular-store'
+
+const userStore = createStore({
+  profile: { name: 'Alice', email: 'alice@example.com' },
+  preferences: { theme: 'dark' },
+})
+
+@Component({
+  selector: 'app-user-card',
+  template: `
+    <div>
+      <h2>{{ profile().name }}</h2>
+      <p>{{ profile().email }}</p>
+    </div>
+  `,
+})
+export class UserCardComponent {
+  // Uses shallow equality by default
+  profile = injectStore(userStore, (state) => state.profile)
+}
+```
+
+## Complete Example: Todo App
+
+Here's a complete Todo application using Angular standalone components:
+
+```typescript
+import { Component, signal } from '@angular/core'
+import { FormsModule } from '@angular/forms'
+import { createStore, injectStore } from '@tanstack/angular-store'
+
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
+interface TodoState {
+  todos: Todo[]
+  filter: 'all' | 'active' | 'completed'
+}
+
+const todoStore = createStore<TodoState>({
+  todos: [],
+  filter: 'all',
+})
+
+// Actions
+const addTodo = (text: string) => {
+  todoStore.setState((state) => ({
+    ...state,
+    todos: [
+      ...state.todos,
+      { id: Date.now(), text, completed: false },
+    ],
+  }))
+}
+
+const toggleTodo = (id: number) => {
+  todoStore.setState((state) => ({
+    ...state,
+    todos: state.todos.map((todo) =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ),
+  }))
+}
+
+const setFilter = (filter: TodoState['filter']) => {
+  todoStore.setState((state) => ({ ...state, filter }))
+}
+
+@Component({
+  selector: 'app-todo',
+  standalone: true,
+  imports: [FormsModule],
+  template: `
+    <div>
+      <h1>Todo App</h1>
+      
+      <form (ngSubmit)="handleSubmit()">
+        <input
+          [(ngModel)]="input"
+          name="todo"
+          placeholder="What needs to be done?"
+        />
+        <button type="submit">Add</button>
+      </form>
+
+      <div>
+        <button (click)="setFilter('all')">All</button>
+        <button (click)="setFilter('active')">Active</button>
+        <button (click)="setFilter('completed')">Completed</button>
+      </div>
+
+      <ul>
+        @for (todo of todos(); track todo.id) {
+          <li>
+            <input
+              type="checkbox"
+              [checked]="todo.completed"
+              (change)="toggleTodo(todo.id)"
+            />
+            <span [style.text-decoration]="todo.completed ? 'line-through' : 'none'">
+              {{ todo.text }}
+            </span>
+          </li>
+        }
+      </ul>
+    </div>
+  `,
+})
+export class TodoAppComponent {
+  input = ''
+  
+  filter = injectStore(todoStore, (state) => state.filter)
+  todos = injectStore(todoStore, (state) => {
+    const { todos, filter } = state
+    if (filter === 'active') return todos.filter((t) => !t.completed)
+    if (filter === 'completed') return todos.filter((t) => t.completed)
+    return todos
+  })
+
+  handleSubmit() {
+    if (this.input.trim()) {
+      addTodo(this.input)
+      this.input = ''
+    }
+  }
+
+  toggleTodo(id: number) {
+    toggleTodo(id)
+  }
+
+  setFilter(filter: TodoState['filter']) {
+    setFilter(filter)
+  }
+}
+```
+
+## Angular-Specific Considerations
+
+### Signals Integration
+
+The Angular adapter uses `linkedSignal` internally:
+- Fully integrates with Angular's signals API
+- Works with `computed()` and `effect()`
+- Automatically handles cleanup with `DestroyRef`
+
+### Working with Angular Signals
+
+```typescript
+import { Component, computed, effect } from '@angular/core'
+import { createStore, injectStore } from '@tanstack/angular-store'
+
+const countStore = createStore({ count: 0, multiplier: 2 })
+
+@Component({
+  selector: 'app-counter',
+  template: `<div>Result: {{ result() }}</div>`,
+})
+export class CounterComponent {
+  count = injectStore(countStore, (state) => state.count)
+  multiplier = injectStore(countStore, (state) => state.multiplier)
+  
+  // Use with computed
+  result = computed(() => this.count() * this.multiplier())
+  
+  constructor() {
+    // Use with effect
+    effect(() => {
+      console.log('Count changed:', this.count())
+    })
+  }
+}
+```
+
+### Dependency Injection
+
+Create injectable services for your stores:
+
+```typescript
+import { Injectable } from '@angular/core'
+import { createStore } from '@tanstack/angular-store'
+
+interface AppState {
+  user: { name: string; id: number } | null
+  isAuthenticated: boolean
+}
+
+@Injectable({ providedIn: 'root' })
+export class AppStoreService {
+  private store = createStore<AppState>({
+    user: null,
+    isAuthenticated: false,
+  })
+
+  getStore() {
+    return this.store
+  }
+
+  login(user: { name: string; id: number }) {
+    this.store.setState({ user, isAuthenticated: true })
+  }
+
+  logout() {
+    this.store.setState({ user: null, isAuthenticated: false })
+  }
+}
+
+// Use in component
+@Component({
+  selector: 'app-header',
+  template: `<div>{{ userName() }}</div>`,
+})
+export class HeaderComponent {
+  private appStore = inject(AppStoreService)
+  userName = injectStore(
+    this.appStore.getStore(),
+    (state) => state.user?.name ?? 'Guest'
+  )
+}
+```
+
+### Server-Side Rendering (SSR)
+
+TanStack Store works with Angular Universal:
+
+```typescript
+import { Injectable } from '@angular/core'
+import { createStore } from '@tanstack/angular-store'
+
+@Injectable({ providedIn: 'root' })
+export class DataStoreService {
+  private store = createStore({ data: null, isLoading: false })
+
+  getStore() {
+    return this.store
+  }
+
+  initialize(initialData: any) {
+    this.store.setState({ data: initialData, isLoading: false })
+  }
+}
+```
+
+### Performance Tips
+
+1. **Use selective subscriptions**: Subscribe only to the state you need
+2. **Leverage signals**: Combine with `computed()` for derived state
+3. **Injectable services**: Wrap stores in services for better organization
+4. **OnPush change detection**: Works perfectly with signals-based stores
+
+## Derived Stores
+
+Create derived stores that react to other stores:
+
+```typescript
+import { Component } from '@angular/core'
+import { createStore, injectStore } from '@tanstack/angular-store'
+
+const countStore = createStore(0)
+const doubleStore = createStore(() => ({ value: countStore.state * 2 }))
+
+@Component({
+  selector: 'app-counter-display',
+  template: `
+    <div>
+      <p>Count: {{ count() }}</p>
+      <p>Double: {{ double() }}</p>
+      <button (click)="increment()">Increment</button>
+    </div>
+  `,
+})
+export class CounterDisplayComponent {
+  count = injectStore(countStore, (state) => state)
+  double = injectStore(doubleStore, (state) => state.value)
+
+  increment() {
+    countStore.setState((prev) => prev + 1)
+  }
+}
+```
+
+## API Reference
+
+For detailed API documentation, see:
+- See the API reference for detailed documentation:
+- 
+
+## TypeScript Support
+
+The Angular adapter provides full TypeScript support:
+
+```typescript
+import { Component } from '@angular/core'
+import { createStore, injectStore } from '@tanstack/angular-store'
+import type { Signal } from '@angular/core'
+
+interface AppState {
+  user: { name: string; id: number }
+  isAuthenticated: boolean
+}
+
+const store = createStore<AppState>({
+  user: { name: '', id: 0 },
+  isAuthenticated: false,
+})
+
+@Component({
+  selector: 'app-component',
+  template: `<div>{{ userName() }}</div>`,
+})
+export class AppComponent {
+  // TypeScript infers the correct types
+  userName = injectStore(store, (state) => state.user.name)
+  // userName is Signal<string>
+}
+```

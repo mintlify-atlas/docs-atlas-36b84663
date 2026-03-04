@@ -1,0 +1,221 @@
+---
+title: useStore
+description: Preact hook for subscribing to TanStack Store state
+---
+
+## Reference
+
+### `useStore`
+
+```tsx
+function useStore<TState, TSelected = NoInfer<TState>>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: NoInfer<TState>) => TSelected,
+  options?: UseStoreOptions<TSelected>
+): TSelected
+```
+
+A Preact hook that subscribes to a TanStack Store atom and returns the selected state. The component will re-render when the selected state changes according to the equality function.
+
+<ParamField path="store" type="Atom<TState> | ReadonlyAtom<TState>">
+  The store atom to subscribe to.
+</ParamField>
+
+<ParamField path="selector" type="(state: TState) => TSelected" default="(d) => d">
+  Optional function that selects a slice of state from the atom. Defaults to returning the entire state.
+</ParamField>
+
+<ParamField path="options" type="UseStoreOptions<TSelected>">
+  Optional configuration object.
+  
+  <Expandable title="properties">
+    <ResponseField name="equal" type="(a: TSelected, b: TSelected) => boolean" default="shallow">
+      Equality function to determine if the selected state has changed. Defaults to `shallow` comparison.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="TSelected" type="TSelected">
+  The selected state value from the atom.
+</ResponseField>
+
+## Usage
+
+### Basic Usage
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+function Counter() {
+  const count = useStore(store, (state) => state.count)
+
+  return <div>Count: {count}</div>
+}
+```
+
+### Selecting Multiple Values
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+function UserProfile() {
+  const user = useStore(store, (state) => ({
+    name: state.user.name,
+    email: state.user.email,
+    avatar: state.user.avatar
+  }))
+
+  return (
+    <div>
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+      <img src={user.avatar} alt="Avatar" />
+    </div>
+  )
+}
+```
+
+### Custom Equality Function
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+// Use strict reference equality
+function TodoList() {
+  const todos = useStore(
+    store,
+    (state) => state.todos,
+    { equal: (a, b) => a === b }
+  )
+
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>{todo.text}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Using Entire State
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+function AppState() {
+  const state = useStore(store)
+
+  return (
+    <div>
+      <p>Count: {state.count}</p>
+      <p>Name: {state.name}</p>
+      <p>Active: {state.isActive ? 'Yes' : 'No'}</p>
+    </div>
+  )
+}
+```
+
+### With Shallow Comparison
+
+```tsx
+import { useStore, shallow } from '@tanstack/preact-store'
+import { store } from './store'
+
+function Settings() {
+  // Shallow compare the selected object
+  const settings = useStore(
+    store,
+    (state) => ({
+      theme: state.settings.theme,
+      language: state.settings.language
+    }),
+    { equal: shallow }
+  )
+
+  return (
+    <div>
+      <p>Theme: {settings.theme}</p>
+      <p>Language: {settings.language}</p>
+    </div>
+  )
+}
+```
+
+### Selecting Derived Values
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+function TodoStats() {
+  const stats = useStore(store, (state) => {
+    const todos = state.todos
+    return {
+      total: todos.length,
+      completed: todos.filter(t => t.done).length,
+      pending: todos.filter(t => !t.done).length
+    }
+  })
+
+  return (
+    <div>
+      <p>Total: {stats.total}</p>
+      <p>Completed: {stats.completed}</p>
+      <p>Pending: {stats.pending}</p>
+    </div>
+  )
+}
+```
+
+### Conditional Rendering
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+function AuthView() {
+  const isLoggedIn = useStore(store, (state) => state.isLoggedIn)
+  const user = useStore(store, (state) => state.user)
+
+  if (!isLoggedIn) {
+    return <div>Please log in</div>
+  }
+
+  return <div>Welcome, {user.name}!</div>
+}
+```
+
+### Multiple Store Subscriptions
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { userStore, settingsStore } from './stores'
+
+function Dashboard() {
+  const userName = useStore(userStore, (state) => state.name)
+  const theme = useStore(settingsStore, (state) => state.theme)
+
+  return (
+    <div className={`theme-${theme}`}>
+      <h1>Welcome, {userName}</h1>
+    </div>
+  )
+}
+```
+
+## Notes
+
+- Implements a custom `useSyncExternalStore` shim for Preact compatibility
+- Automatically handles subscription cleanup when the component unmounts
+- Defaults to `shallow` equality comparison for optimal performance
+- The selector function runs on each potential update - keep it simple or memoize expensive computations
+- Built specifically for Preact - does not require `preact/compat`
+- Uses `useLayoutEffect` and `useState` internally for synchronization
+- Works with both Preact function components and class components (via function children)

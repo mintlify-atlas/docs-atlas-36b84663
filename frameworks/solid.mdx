@@ -1,0 +1,432 @@
+---
+title: Solid
+description: Use TanStack Store in Solid applications
+---
+
+TanStack Store provides Solid support through the `@tanstack/solid-store` package, which integrates seamlessly with Solid's fine-grained reactivity system.
+
+## Installation
+
+Install the Solid adapter package:
+
+<CodeGroup>
+
+```bash npm
+npm install @tanstack/solid-store
+```
+
+```bash pnpm
+pnpm add @tanstack/solid-store
+```
+
+```bash yarn
+yarn add @tanstack/solid-store
+```
+
+```bash bun
+bun add @tanstack/solid-store
+```
+
+</CodeGroup>
+
+<Note>
+  The `@tanstack/solid-store` package re-exports everything from `@tanstack/store`, so you only need to install the Solid package.
+</Note>
+
+## Basic Usage
+
+The primary way to use TanStack Store in Solid is through the `useStore` hook:
+
+```tsx
+import { createStore, useStore } from '@tanstack/solid-store'
+
+// Create a store
+const counterStore = createStore({
+  count: 0,
+})
+
+function Counter() {
+  // Subscribe to the store - returns an Accessor
+  const count = useStore(counterStore, (state) => state.count)
+
+  const increment = () => {
+    counterStore.setState((prev) => ({ count: prev.count + 1 }))
+  }
+
+  return (
+    <div>
+      <p>Count: {count()}</p>
+      <button onClick={increment}>Increment</button>
+    </div>
+  )
+}
+```
+
+## The useStore Hook
+
+The `useStore` hook subscribes your component to store updates and returns a Solid Accessor that automatically updates.
+
+### Signature
+
+```typescript
+function useStore<TState, TSelected>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: TState) => TSelected,
+  options?: { equal?: (a: TSelected, b: TSelected) => boolean }
+): Accessor<TSelected>
+```
+
+### Parameters
+
+- `store` - The store instance to subscribe to
+- `selector` - (Optional) A function that selects which part of the state you need. Defaults to returning the entire state
+- `options.equal` - (Optional) A custom equality function. Defaults to `shallow`
+
+### Return Value
+
+Returns a Solid `Accessor<TSelected>` (a function that returns the selected state). Call it like `count()` to get the current value.
+
+## Selector Optimization
+
+The selector function allows you to subscribe to only the parts of state you need:
+
+```tsx
+import { createStore, useStore } from '@tanstack/solid-store'
+
+const appStore = createStore({
+  user: { name: 'Alice', age: 30 },
+  settings: { theme: 'dark', notifications: true },
+})
+
+function UserProfile() {
+  // Only updates when user.name changes
+  const userName = useStore(appStore, (state) => state.user.name)
+
+  return <h1>Welcome, {userName()}!</h1>
+}
+
+function SettingsPanel() {
+  // Only updates when settings change
+  const settings = useStore(appStore, (state) => state.settings)
+
+  return (
+    <div>
+      <p>Theme: {settings().theme}</p>
+      <p>Notifications: {settings().notifications ? 'On' : 'Off'}</p>
+    </div>
+  )
+}
+```
+
+## Custom Equality Functions
+
+For complex state selections, provide a custom equality function:
+
+```tsx
+import { createStore, useStore } from '@tanstack/solid-store'
+
+const todoStore = createStore({
+  todos: [
+    { id: 1, text: 'Buy groceries', completed: false },
+    { id: 2, text: 'Walk the dog', completed: true },
+  ],
+})
+
+function deepEqual<T>(a: T, b: T): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function TodoList() {
+  // Use deep equality for array comparison
+  const activeTodos = useStore(
+    todoStore,
+    (state) => state.todos.filter((todo) => !todo.completed),
+    { equal: deepEqual }
+  )
+
+  return (
+    <ul>
+      <For each={activeTodos()}>
+        {(todo) => <li>{todo.text}</li>}
+      </For>
+    </ul>
+  )
+}
+```
+
+## Shallow Equality
+
+The package exports a `shallow` utility for shallow object comparison (this is the default):
+
+```tsx
+import { createStore, useStore, shallow } from '@tanstack/solid-store'
+
+const userStore = createStore({
+  profile: { name: 'Alice', email: 'alice@example.com' },
+  preferences: { theme: 'dark' },
+})
+
+function UserCard() {
+  // Explicitly use shallow comparison (this is the default)
+  const profile = useStore(
+    userStore,
+    (state) => state.profile,
+    { equal: shallow }
+  )
+
+  return (
+    <div>
+      <h2>{profile().name}</h2>
+      <p>{profile().email}</p>
+    </div>
+  )
+}
+```
+
+## Complete Example: Todo App
+
+Here's a complete Todo application using Solid:
+
+```tsx
+import { createSignal, For } from 'solid-js'
+import { createStore, useStore } from '@tanstack/solid-store'
+
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
+interface TodoState {
+  todos: Todo[]
+  filter: 'all' | 'active' | 'completed'
+}
+
+const todoStore = createStore<TodoState>({
+  todos: [],
+  filter: 'all',
+})
+
+// Actions
+const addTodo = (text: string) => {
+  todoStore.setState((state) => ({
+    ...state,
+    todos: [
+      ...state.todos,
+      { id: Date.now(), text, completed: false },
+    ],
+  }))
+}
+
+const toggleTodo = (id: number) => {
+  todoStore.setState((state) => ({
+    ...state,
+    todos: state.todos.map((todo) =>
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ),
+  }))
+}
+
+const setFilter = (filter: TodoState['filter']) => {
+  todoStore.setState((state) => ({ ...state, filter }))
+}
+
+function TodoApp() {
+  const [input, setInput] = createSignal('')
+  const filter = useStore(todoStore, (state) => state.filter)
+  const todos = useStore(todoStore, (state) => {
+    const { todos, filter } = state
+    if (filter === 'active') return todos.filter((t) => !t.completed)
+    if (filter === 'completed') return todos.filter((t) => t.completed)
+    return todos
+  })
+
+  const handleSubmit = (e: Event) => {
+    e.preventDefault()
+    if (input().trim()) {
+      addTodo(input())
+      setInput('')
+    }
+  }
+
+  return (
+    <div>
+      <h1>Todo App</h1>
+      
+      <form onSubmit={handleSubmit}>
+        <input
+          value={input()}
+          onInput={(e) => setInput(e.currentTarget.value)}
+          placeholder="What needs to be done?"
+        />
+        <button type="submit">Add</button>
+      </form>
+
+      <div>
+        <button onClick={() => setFilter('all')}>All</button>
+        <button onClick={() => setFilter('active')}>Active</button>
+        <button onClick={() => setFilter('completed')}>Completed</button>
+      </div>
+
+      <ul>
+        <For each={todos()}>
+          {(todo) => (
+            <li>
+              <input
+                type="checkbox"
+                checked={todo.completed}
+                onChange={() => toggleTodo(todo.id)}
+              />
+              <span style={{ 'text-decoration': todo.completed ? 'line-through' : 'none' }}>
+                {todo.text}
+              </span>
+            </li>
+          )}
+        </For>
+      </ul>
+    </div>
+  )
+}
+
+export default TodoApp
+```
+
+## Solid-Specific Considerations
+
+### Fine-Grained Reactivity
+
+The Solid adapter leverages Solid's fine-grained reactivity:
+- Uses `createSignal` internally to track changes
+- Automatically cleans up with `onCleanup`
+- Integrates with Solid's reactive primitives (`createMemo`, `createEffect`, etc.)
+
+### Working with Solid's Reactivity
+
+You can use store values in Solid's reactive primitives:
+
+```tsx
+import { createMemo, createEffect } from 'solid-js'
+import { createStore, useStore } from '@tanstack/solid-store'
+
+const countStore = createStore({ count: 0, multiplier: 2 })
+
+function Counter() {
+  const count = useStore(countStore, (state) => state.count)
+  const multiplier = useStore(countStore, (state) => state.multiplier)
+  
+  // Use with createMemo
+  const result = createMemo(() => count() * multiplier())
+  
+  // Use with createEffect
+  createEffect(() => {
+    console.log('Count changed:', count())
+  })
+  
+  return <div>Result: {result()}</div>
+}
+```
+
+### Server-Side Rendering (SSR)
+
+TanStack Store works with SolidStart and SSR:
+
+```tsx
+import { createStore } from '@tanstack/solid-store'
+
+// Create store at module level
+export const appStore = createStore({
+  data: null,
+  isLoading: false,
+})
+
+// Initialize with server data
+export function initializeStore(initialData: any) {
+  appStore.setState({ data: initialData, isLoading: false })
+}
+```
+
+### Performance Tips
+
+1. **Leverage Solid's reactivity**: The combination of TanStack Store and Solid's signals provides optimal performance
+2. **Use selective subscriptions**: Subscribe only to the state you need
+3. **Combine with createMemo**: For complex derived state, use `createMemo` on top of store values
+4. **Multiple stores**: Create focused stores for different domains
+
+## Derived Stores
+
+Create derived stores that react to other stores:
+
+```tsx
+import { createStore, useStore } from '@tanstack/solid-store'
+
+const countStore = createStore(0)
+const doubleStore = createStore(() => ({ value: countStore.state * 2 }))
+
+function CounterDisplay() {
+  const count = useStore(countStore, (state) => state)
+  const double = useStore(doubleStore, (state) => state.value)
+
+  return (
+    <div>
+      <p>Count: {count()}</p>
+      <p>Double: {double()}</p>
+      <button onClick={() => countStore.setState((prev) => prev + 1)}>
+        Increment
+      </button>
+    </div>
+  )
+}
+```
+
+## Combining with Solid Store
+
+You can use TanStack Store alongside Solid's built-in store if needed:
+
+```tsx
+import { createStore as createSolidStore } from 'solid-js/store'
+import { createStore as createTanStackStore, useStore } from '@tanstack/solid-store'
+
+// Solid's store for local component state
+const [localState, setLocalState] = createSolidStore({ items: [] })
+
+// TanStack Store for global state
+const globalStore = createTanStackStore({ user: null })
+
+function Component() {
+  const user = useStore(globalStore, (state) => state.user)
+  // Use both!
+}
+```
+
+## API Reference
+
+For detailed API documentation, see:
+- See the API reference for detailed documentation:
+- 
+
+## TypeScript Support
+
+The Solid adapter provides full TypeScript support:
+
+```tsx
+import { createStore, useStore } from '@tanstack/solid-store'
+import type { Accessor } from 'solid-js'
+
+interface AppState {
+  user: { name: string; id: number }
+  isAuthenticated: boolean
+}
+
+const store = createStore<AppState>({
+  user: { name: '', id: 0 },
+  isAuthenticated: false,
+})
+
+function Component() {
+  // TypeScript infers the correct types
+  const userName = useStore(store, (state) => state.user.name)
+  // userName is Accessor<string>
+  
+  return <div>{userName()}</div>
+}
+```

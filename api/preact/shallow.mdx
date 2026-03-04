@@ -1,0 +1,232 @@
+---
+title: shallow
+description: Shallow equality comparison function for Preact Store
+---
+
+## Reference
+
+### `shallow`
+
+```tsx
+function shallow<T>(objA: T, objB: T): boolean
+```
+
+A utility function that performs shallow equality comparison between two values. Used as the default equality function in `useStore` to prevent unnecessary component re-renders.
+
+<ParamField path="objA" type="T">
+  The first value to compare.
+</ParamField>
+
+<ParamField path="objB" type="T">
+  The second value to compare.
+</ParamField>
+
+### Returns
+
+<ResponseField name="boolean" type="boolean">
+  `true` if the values are shallowly equal, `false` otherwise.
+</ResponseField>
+
+## Comparison Behavior
+
+The `shallow` function handles various data types:
+
+- **Reference equality**: Returns `true` if `Object.is(objA, objB)`
+- **Primitives/null**: Returns `false` if either value is not an object
+- **Map**: Compares size and all entries using `Object.is`
+- **Set**: Compares size and all values for presence
+- **Date**: Compares timestamps using `getTime()`
+- **Objects**: Compares own properties (including symbols) using `Object.is`
+
+## Usage
+
+### Default Behavior
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+// shallow is used by default
+function Component() {
+  const user = useStore(store, (state) => state.user)
+  return <div>{user.name}</div>
+}
+```
+
+### Explicit Usage
+
+```tsx
+import { useStore, shallow } from '@tanstack/preact-store'
+import { store } from './store'
+
+function UserCard() {
+  const user = useStore(
+    store,
+    (state) => ({
+      name: state.name,
+      email: state.email,
+      role: state.role
+    }),
+    { equal: shallow }
+  )
+
+  return (
+    <div>
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+    </div>
+  )
+}
+```
+
+### Selecting Object Slices
+
+```tsx
+import { useStore, shallow } from '@tanstack/preact-store'
+import { store } from './store'
+
+function Settings() {
+  const settings = useStore(
+    store,
+    (state) => ({
+      theme: state.settings.theme,
+      language: state.settings.language,
+      notifications: state.settings.notifications
+    }),
+    { equal: shallow }
+  )
+
+  return (
+    <div>
+      <p>Theme: {settings.theme}</p>
+      <p>Language: {settings.language}</p>
+    </div>
+  )
+}
+```
+
+### Reference Equality Alternative
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+// Use reference equality for primitive values or immutable references
+function Counter() {
+  const count = useStore(
+    store,
+    (state) => state.count,
+    { equal: (a, b) => a === b }
+  )
+
+  return <div>Count: {count}</div>
+}
+```
+
+### Array Comparisons
+
+```tsx
+import { useStore, shallow } from '@tanstack/preact-store'
+import { store } from './store'
+
+function FilteredList() {
+  // Shallow comparison checks array length and element references
+  const activeItems = useStore(
+    store,
+    (state) => state.items.filter(item => item.active),
+    { equal: shallow }
+  )
+
+  return (
+    <ul>
+      {activeItems.map(item => (
+        <li key={item.id}>{item.name}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Map and Set Support
+
+```tsx
+import { useStore, shallow } from '@tanstack/preact-store'
+import { store } from './store'
+
+function TagCloud() {
+  // shallow handles Map and Set comparisons
+  const tags = useStore(
+    store,
+    (state) => state.tags, // Map or Set
+    { equal: shallow }
+  )
+
+  return (
+    <div>
+      {Array.from(tags).map(tag => (
+        <span key={tag}>{tag}</span>
+      ))}
+    </div>
+  )
+}
+```
+
+### Deep Equality Alternative
+
+```tsx
+import { useStore } from '@tanstack/preact-store'
+import { store } from './store'
+
+// Custom deep equality for nested structures
+const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
+function ComplexData() {
+  const data = useStore(
+    store,
+    (state) => state.complexNested,
+    { equal: deepEqual }
+  )
+
+  return <pre>{JSON.stringify(data, null, 2)}</pre>
+}
+```
+
+### Performance Optimization
+
+```tsx
+import { useStore, shallow } from '@tanstack/preact-store'
+import { store } from './store'
+
+function OptimizedList() {
+  // Only re-render when the selected properties change
+  const listData = useStore(
+    store,
+    (state) => ({
+      items: state.items,
+      filter: state.filter,
+      sort: state.sort
+    }),
+    { equal: shallow }
+  )
+
+  return (
+    <div>
+      {listData.items
+        .filter(listData.filter)
+        .sort(listData.sort)
+        .map(item => <div key={item.id}>{item.name}</div>)}
+    </div>
+  )
+}
+```
+
+## Notes
+
+- Used as the **default equality function** in `useStore`
+- Only compares **own properties** at the first level (shallow)
+- For nested objects, only the reference is compared
+- Handles special object types: Map, Set, Date
+- Includes symbol properties in comparison (unlike basic React shallow)
+- More efficient than deep equality for most use cases
+- Prevents unnecessary re-renders when object contents are equivalent
+- Works with Preact's virtual DOM diffing for optimal performance

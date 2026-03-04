@@ -1,0 +1,330 @@
+---
+title: 'batch'
+description: 'Batch multiple store updates to optimize performance'
+---
+
+## Function Signature
+
+```typescript
+function batch(fn: () => void): void
+```
+
+Batches multiple store or atom updates into a single update cycle. This prevents unnecessary re-renders and notifications by deferring subscriber notifications until all updates within the batch are complete.
+
+## Parameters
+
+<ParamField path="fn" type="() => void" required>
+  A function that performs multiple updates. All state changes within this function will be batched together.
+</ParamField>
+
+## Returns
+
+The function returns `void` and executes synchronously.
+
+## How It Works
+
+When you update multiple stores or atoms, each update normally triggers subscribers immediately. With `batch()`, subscriber notifications are deferred until the batch function completes:
+
+1. The batch depth counter is incremented
+2. Your function executes and makes state changes
+3. The batch depth counter is decremented
+4. All queued notifications are flushed at once
+
+This ensures that subscribers only receive one notification for all the batched changes, rather than one per change.
+
+## Examples
+
+### Basic Batching
+
+```typescript
+import { createStore, batch } from '@tanstack/store'
+
+const firstNameStore = createStore('John')
+const lastNameStore = createStore('Doe')
+const ageStore = createStore(30)
+
+let notificationCount = 0
+
+// Create a computed store that depends on all three
+const fullNameStore = createStore(() => {
+  notificationCount++
+  return `${firstNameStore.state} ${lastNameStore.state}, age ${ageStore.state}`
+})
+
+// Subscribe to changes
+fullNameStore.subscribe((value) => {
+  console.log('Updated:', value)
+})
+
+// Without batching - triggers 3 separate notifications
+firstNameStore.setState(() => 'Jane')
+lastNameStore.setState(() => 'Smith')
+ageStore.setState(() => 25)
+console.log('Notifications:', notificationCount) // 3
+
+notificationCount = 0
+
+// With batching - triggers only 1 notification
+batch(() => {
+  firstNameStore.setState(() => 'Bob')
+  lastNameStore.setState(() => 'Johnson')
+  ageStore.setState(() => 35)
+})
+console.log('Notifications:', notificationCount) // 1
+```
+
+### Optimizing Multiple Updates
+
+```typescript
+import { createStore, batch } from '@tanstack/store'
+
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
+const todosStore = createStore<Todo[]>([])
+const filterStore = createStore<'all' | 'active' | 'completed'>('all')
+const searchStore = createStore('')
+
+const filteredTodosStore = createStore(() => {
+  const todos = todosStore.state
+  const filter = filterStore.state
+  const search = searchStore.state.toLowerCase()
+  
+  return todos
+    .filter(todo => {
+      switch (filter) {
+        case 'active': return !todo.completed
+        case 'completed': return todo.completed
+        default: return true
+      }
+    })
+    .filter(todo => todo.text.toLowerCase().includes(search))
+})
+
+// Update multiple filters at once
+function applyFilters(filter: 'all' | 'active' | 'completed', search: string) {
+  batch(() => {
+    filterStore.setState(() => filter)
+    searchStore.setState(() => search)
+  })
+  // Only one recomputation of filteredTodosStore
+}
+
+applyFilters('active', 'important')
+```
+
+### Batching with Atoms
+
+```typescript
+import { createAtom, batch } from '@tanstack/store'
+
+const xAtom = createAtom(0)
+const yAtom = createAtom(0)
+
+const distanceAtom = createAtom(() => {
+  const x = xAtom.get()
+  const y = yAtom.get()
+  return Math.sqrt(x * x + y * y)
+})
+
+let updateCount = 0
+distanceAtom.subscribe(() => {
+  updateCount++
+})
+
+// Update coordinates together
+batch(() => {
+  xAtom.set(3)
+  yAtom.set(4)
+})
+
+console.log(distanceAtom.get()) // 5
+console.log('Updates:', updateCount) // 1 (not 2)
+```
+
+### Form Updates
+
+```typescript
+import { createStore, batch } from '@tanstack/store'
+
+interface FormData {
+  username: string
+  email: string
+  password: string
+  confirmPassword: string
+}
+
+const formStore = createStore<FormData>({
+  username: '',
+  email: '',
+  password: '',
+  confirmPassword: ''
+})
+
+const validationStore = createStore(() => {
+  const form = formStore.state
+  return {
+    isValid: form.password === form.confirmPassword && 
+             form.password.length >= 8 &&
+             form.email.includes('@'),
+    errors: [] as string[]
+  }
+})
+
+// Update multiple form fields at once
+function updateFormFields(updates: Partial<FormData>) {
+  batch(() => {
+    formStore.setState((prev) => ({ ...prev, ...updates }))
+  })
+  // Validation only runs once after all updates
+}
+
+updateFormFields({
+  username: 'johndoe',
+  email: 'john@example.com',
+  password: 'password123',
+  confirmPassword: 'password123'
+})
+```
+
+### Nested Batching
+
+```typescript
+import { createStore, batch } from '@tanstack/store'
+
+const aStore = createStore(0)
+const bStore = createStore(0)
+const cStore = createStore(0)
+
+const sumStore = createStore(() => {
+  return aStore.state + bStore.state + cStore.state
+})
+
+let notifications = 0
+sumStore.subscribe(() => notifications++)
+
+// Nested batches are supported
+batch(() => {
+  aStore.setState((prev) => prev + 1)
+  
+  batch(() => {
+    bStore.setState((prev) => prev + 2)
+    cStore.setState((prev) => prev + 3)
+  })
+  
+  aStore.setState((prev) => prev + 1)
+})
+
+console.log('Notifications:', notifications) // 1
+console.log('Sum:', sumStore.state) // 7 (0+1+1 + 0+2 + 0+3)
+```
+
+### Performance Optimization Example
+
+```typescript
+import { createStore, batch } from '@tanstack/store'
+
+interface Point {
+  x: number
+  y: number
+}
+
+const pointsStore = createStore<Point[]>([])
+
+// Add multiple points efficiently
+function addPoints(newPoints: Point[]) {
+  batch(() => {
+    for (const point of newPoints) {
+      pointsStore.setState((prev) => [...prev, point])
+    }
+  })
+}
+
+// Even better: do it in a single update
+function addPointsOptimized(newPoints: Point[]) {
+  pointsStore.setState((prev) => [...prev, ...newPoints])
+}
+
+const points = Array.from({ length: 100 }, (_, i) => ({ x: i, y: i * 2 }))
+
+// This triggers only one notification despite 100 updates
+addPoints(points)
+```
+
+### Conditional Batching
+
+```typescript
+import { createStore, batch } from '@tanstack/store'
+
+const dataStore = createStore<number[]>([])
+const metadataStore = createStore({ count: 0, sum: 0, average: 0 })
+
+function updateData(newData: number[], shouldBatch: boolean = true) {
+  const updateFn = () => {
+    dataStore.setState(() => newData)
+    
+    const sum = newData.reduce((a, b) => a + b, 0)
+    metadataStore.setState(() => ({
+      count: newData.length,
+      sum,
+      average: newData.length > 0 ? sum / newData.length : 0
+    }))
+  }
+  
+  if (shouldBatch) {
+    batch(updateFn)
+  } else {
+    updateFn()
+  }
+}
+
+updateData([1, 2, 3, 4, 5], true) // Batched
+updateData([6, 7, 8], false) // Not batched
+```
+
+## Performance Benefits
+
+<CardGroup cols={2}>
+  <Card title="Reduced Notifications" icon="bell-slash">
+    Subscribers receive one notification instead of many, reducing callback execution.
+  </Card>
+  
+  <Card title="Fewer Recomputations" icon="gauge">
+    Computed stores/atoms recalculate once instead of for each individual update.
+  </Card>
+  
+  <Card title="Better UI Performance" icon="rocket">
+    In UI frameworks, batching prevents multiple re-renders from cascading updates.
+  </Card>
+  
+  <Card title="Atomic Updates" icon="atom">
+    All changes appear to happen simultaneously to subscribers, maintaining consistency.
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Note>
+  **Use batching when:**
+  - Updating multiple related stores/atoms together
+  - Performing bulk operations
+  - Updating multiple properties that trigger the same computed values
+  - Working with forms or complex state objects
+</Note>
+
+<Warning>
+  **Avoid batching when:**
+  - Only updating a single store
+  - You need intermediate states to be observable
+  - The operations are naturally separated in time
+  - Debugging state changes (batching can hide the update sequence)
+</Warning>
+
+## Related APIs
+
+- [flush](/api/core/flush) - Manually trigger pending notifications
+- [createStore](/api/core/create-store) - Create stores that can be batched
+- [createAtom](/api/core/create-atom) - Create atoms that can be batched

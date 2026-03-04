@@ -1,0 +1,251 @@
+---
+title: injectStore
+description: Angular injection function for subscribing to TanStack Store state
+---
+
+## Reference
+
+### `injectStore`
+
+```ts
+function injectStore<TState, TSelected = NoInfer<TState>>(
+  store: Atom<TState> | ReadonlyAtom<TState>,
+  selector?: (state: NoInfer<TState>) => TSelected,
+  options?: CreateSignalOptions<TSelected> & { injector?: Injector }
+): Signal<TSelected>
+```
+
+An Angular injection function that subscribes to a TanStack Store atom and returns a readonly signal. The signal will update when the selected state changes according to the equality function.
+
+<ParamField path="store" type="Atom<TState> | ReadonlyAtom<TState>">
+  The store atom to subscribe to.
+</ParamField>
+
+<ParamField path="selector" type="(state: TState) => TSelected" default="(d) => d">
+  Optional function that selects a slice of state from the atom. Defaults to returning the entire state.
+</ParamField>
+
+<ParamField path="options" type="CreateSignalOptions<TSelected> & { injector?: Injector }">
+  Optional configuration object.
+  
+  <Expandable title="properties">
+    <ResponseField name="equal" type="(a: TSelected, b: TSelected) => boolean" default="shallow">
+      Equality function to determine if the selected state has changed. Defaults to `shallow` comparison.
+    </ResponseField>
+    
+    <ResponseField name="injector" type="Injector">
+      Optional Angular injector. If not provided, the function must be called within an injection context.
+    </ResponseField>
+  </Expandable>
+</ParamField>
+
+### Returns
+
+<ResponseField name="Signal<TSelected>" type="Signal<TSelected>">
+  An Angular readonly signal containing the selected state value.
+</ResponseField>
+
+## Usage
+
+### Basic Usage
+
+```ts
+import { Component } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+import { store } from './store'
+
+@Component({
+  selector: 'app-counter',
+  template: `<div>Count: {{ count() }}</div>`,
+  standalone: true
+})
+export class CounterComponent {
+  count = injectStore(store, (state) => state.count)
+}
+```
+
+### Selecting Multiple Values
+
+```ts
+import { Component } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+import { store } from './store'
+
+@Component({
+  selector: 'app-user-profile',
+  template: `
+    <div>
+      <h2>{{ user().name }}</h2>
+      <p>{{ user().email }}</p>
+      <span>{{ user().role }}</span>
+    </div>
+  `,
+  standalone: true
+})
+export class UserProfileComponent {
+  user = injectStore(store, (state) => ({
+    name: state.user.name,
+    email: state.user.email,
+    role: state.user.role
+  }))
+}
+```
+
+### Custom Equality Function
+
+```ts
+import { Component } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+import { store } from './store'
+
+@Component({
+  selector: 'app-settings',
+  template: `<div>{{ settings() | json }}</div>`,
+  standalone: true
+})
+export class SettingsComponent {
+  settings = injectStore(
+    store,
+    (state) => state.settings,
+    {
+      equal: (a, b) => JSON.stringify(a) === JSON.stringify(b)
+    }
+  )
+}
+```
+
+### Using Entire State
+
+```ts
+import { Component } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+import { store } from './store'
+
+@Component({
+  selector: 'app-state-viewer',
+  template: `
+    <div>
+      <p>Count: {{ state().count }}</p>
+      <p>Name: {{ state().name }}</p>
+      <p>Active: {{ state().isActive }}</p>
+    </div>
+  `,
+  standalone: true
+})
+export class StateViewerComponent {
+  state = injectStore(store)
+}
+```
+
+### With Computed Signals
+
+```ts
+import { Component, computed } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+import { store } from './store'
+
+@Component({
+  selector: 'app-todo-stats',
+  template: `
+    <div>
+      <p>Total: {{ stats().total }}</p>
+      <p>Completed: {{ stats().completed }}</p>
+      <p>Pending: {{ stats().pending }}</p>
+    </div>
+  `,
+  standalone: true
+})
+export class TodoStatsComponent {
+  todos = injectStore(store, (state) => state.todos)
+  
+  stats = computed(() => {
+    const all = this.todos()
+    return {
+      total: all.length,
+      completed: all.filter(t => t.done).length,
+      pending: all.filter(t => !t.done).length
+    }
+  })
+}
+```
+
+### With Custom Injector
+
+```ts
+import { Component, Injector, inject } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+import { store } from './store'
+
+@Component({
+  selector: 'app-custom',
+  template: `<div>{{ data() }}</div>`,
+  standalone: true
+})
+export class CustomComponent {
+  private injector = inject(Injector)
+  
+  // Use custom injector for dynamic injection
+  data = injectStore(
+    store,
+    (state) => state.data,
+    { injector: this.injector }
+  )
+}
+```
+
+### Control Flow with @if
+
+```ts
+import { Component } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+import { store } from './store'
+
+@Component({
+  selector: 'app-conditional',
+  template: `
+    @if (isLoggedIn()) {
+      <div>Welcome, {{ user().name }}!</div>
+    } @else {
+      <div>Please log in</div>
+    }
+  `,
+  standalone: true
+})
+export class ConditionalComponent {
+  isLoggedIn = injectStore(store, (state) => state.isLoggedIn)
+  user = injectStore(store, (state) => state.user)
+}
+```
+
+### With @for Loop
+
+```ts
+import { Component } from '@angular/core'
+import { injectStore } from '@tanstack/angular-store'
+import { store } from './store'
+
+@Component({
+  selector: 'app-todo-list',
+  template: `
+    <ul>
+      @for (todo of todos(); track todo.id) {
+        <li>{{ todo.text }}</li>
+      }
+    </ul>
+  `,
+  standalone: true
+})
+export class TodoListComponent {
+  todos = injectStore(store, (state) => state.todos)
+}
+```
+
+## Notes
+
+- Must be called within an **injection context** (constructor, field initializer) or provide a custom injector
+- Returns an Angular **readonly signal** - access the value by calling it as a function
+- Uses `linkedSignal` internally for optimal Angular reactivity
+- Automatically cleans up subscriptions using `DestroyRef`
+- Defaults to `shallow` equality comparison
+- Compatible with Angular's signals and computed values
+- Works seamlessly with Angular's control flow syntax (@if, @for, etc.)

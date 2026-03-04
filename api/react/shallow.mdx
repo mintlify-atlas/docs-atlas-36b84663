@@ -1,0 +1,120 @@
+---
+title: shallow
+description: Shallow equality comparison function for React Store
+---
+
+## Reference
+
+### `shallow`
+
+```tsx
+function shallow<T>(objA: T, objB: T): boolean
+```
+
+A utility function that performs shallow equality comparison between two values. Useful as a comparison function for `useStore` to prevent unnecessary re-renders when selecting object slices.
+
+<ParamField path="objA" type="T">
+  The first value to compare.
+</ParamField>
+
+<ParamField path="objB" type="T">
+  The second value to compare.
+</ParamField>
+
+### Returns
+
+<ResponseField name="boolean" type="boolean">
+  `true` if the values are shallowly equal, `false` otherwise.
+</ResponseField>
+
+## Comparison Behavior
+
+The `shallow` function handles various data types:
+
+- **Reference equality**: Returns `true` if `Object.is(objA, objB)`
+- **Primitives/null**: Returns `false` if either value is not an object
+- **Map**: Compares size and all entries using `Object.is`
+- **Set**: Compares size and all values for presence
+- **Date**: Compares timestamps using `getTime()`
+- **Objects**: Compares own properties (including symbols) using `Object.is`
+
+## Usage
+
+### With useStore
+
+```tsx
+import { useStore, shallow } from '@tanstack/react-store'
+import { store } from './store'
+
+function TodoList() {
+  // Only re-render if the todos array properties change
+  const todos = useStore(
+    store,
+    (state) => state.todos,
+    shallow
+  )
+
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>{todo.text}</li>
+      ))}
+    </ul>
+  )
+}
+```
+
+### Selecting Object Slices
+
+```tsx
+import { useStore, shallow } from '@tanstack/react-store'
+import { store } from './store'
+
+function UserCard() {
+  // Shallow compare the selected object
+  const user = useStore(
+    store,
+    (state) => ({
+      name: state.user.name,
+      avatar: state.user.avatar,
+      status: state.user.status
+    }),
+    shallow
+  )
+
+  return (
+    <div>
+      <img src={user.avatar} alt={user.name} />
+      <h2>{user.name}</h2>
+      <span>{user.status}</span>
+    </div>
+  )
+}
+```
+
+### With Arrays
+
+```tsx
+import { useStore, shallow } from '@tanstack/react-store'
+import { store } from './store'
+
+function FilteredList() {
+  // Re-render only if the filtered array reference or length changes
+  const items = useStore(
+    store,
+    (state) => state.items.filter(item => item.active),
+    shallow
+  )
+
+  return <div>Active items: {items.length}</div>
+}
+```
+
+## Notes
+
+- Only compares **own properties** at the first level (shallow)
+- For nested objects, only the reference is compared
+- Handles special object types: Map, Set, Date
+- Includes symbol properties in comparison
+- More efficient than deep equality for most React use cases
+- Use reference equality (default) if selecting primitive values or when you want strict reference checks

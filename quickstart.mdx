@@ -1,80 +1,505 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Build your first TanStack Store in 5 minutes with step-by-step examples
 ---
 
-## Get started in three steps
+# Quickstart Guide
 
-Get your documentation site running locally and make your first customization.
+Get up and running with TanStack Store in minutes. This guide walks you through creating your first store and integrating it with your framework.
 
-### Step 1: Set up your local environment
+## Your First Store
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Let's create a simple counter application to demonstrate the core concepts.
+
+<Steps>
+  <Step title="Install TanStack Store">
+    First, install the appropriate package for your framework:
+
+    <CodeGroup>
+    ```bash React
+    npm install @tanstack/react-store
+    ```
+
+    ```bash Vue
+    npm install @tanstack/vue-store
+    ```
+
+    ```bash Solid
+    npm install @tanstack/solid-store
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Create a Store">
+    Create a store to manage your application state. Stores can be created inside or outside of components:
+
+    <CodeGroup>
+    ```typescript React
+    import { Store } from '@tanstack/react-store'
+
+    // Create a store with initial state
+    export const store = new Store({
+      dogs: 0,
+      cats: 0,
+    })
+    ```
+
+    ```typescript Vue
+    import { Store } from '@tanstack/vue-store'
+
+    // Create a store with initial state
+    export const store = new Store({
+      dogs: 0,
+      cats: 0,
+    })
+    ```
+
+    ```typescript Solid
+    import { Store } from '@tanstack/solid-store'
+
+    // Create a store with initial state
+    export const store = new Store({
+      cats: 0,
+      dogs: 0,
+    })
+    ```
+    </CodeGroup>
+
+    <Info>
+    Stores can be instantiated outside of components and shared across your entire application.
+    </Info>
+  </Step>
+
+  <Step title="Read Store State">
+    Use the framework adapter's hook/composable to read from the store. Only the specific data you select will trigger re-renders:
+
+    <CodeGroup>
+    ```tsx React
+    import { useStore } from '@tanstack/react-store'
+    import { store } from './store'
+
+    function Display({ animal }: { animal: 'dogs' | 'cats' }) {
+      // This component only re-renders when state[animal] changes
+      const count = useStore(store, (state) => state[animal])
+      
+      return <div>{animal}: {count}</div>
+    }
+    ```
+
+    ```vue Vue
+    <script setup>
+    import { useStore } from '@tanstack/vue-store'
+    import { store } from './store'
+
+    const props = defineProps({ animal: String })
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    // This component only re-renders when state[animal] changes
+    const count = useStore(store, (state) => state[props.animal])
+    </script>
 
-### Step 2: Deploy your changes
+    <template>
+      <div>{{ animal }}: {{ count }}</div>
+    </template>
+    ```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```tsx Solid
+    import { useStore } from '@tanstack/solid-store'
+    import { store } from './store'
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    function Display(props: { animals: 'dogs' | 'cats' }) {
+      // This component only re-renders when state[animals] changes
+      const count = useStore(store, (state) => state[props.animals])
+      
+      return <div>{props.animals}: {count()}</div>
+    }
+    ```
+    </CodeGroup>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Note>
+    The selector function enables fine-grained subscriptions. Components only re-render when their selected data changes, not when any part of the store updates.
+    </Note>
+  </Step>
 
-### Step 3: Go live
+  <Step title="Update Store State">
+    Update the store state using `setState`. Updates are immutable and trigger subscriptions:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    <CodeGroup>
+    ```tsx React
+    import { store } from './store'
 
-## Next steps
+    function Increment({ animal }: { animal: 'dogs' | 'cats' }) {
+      const updateCount = () => {
+        store.setState((state) => ({
+          ...state,
+          [animal]: state[animal] + 1,
+        }))
+      }
 
-Now that you have your docs running, explore these key features:
+      return (
+        <button onClick={updateCount}>
+          My Friend Likes {animal}
+        </button>
+      )
+    }
+    ```
+
+    ```vue Vue
+    <script setup>
+    import { store } from './store'
+
+    const props = defineProps({ animal: String })
+
+    function updateCount() {
+      store.setState((state) => ({
+        ...state,
+        [props.animal]: state[props.animal] + 1,
+      }))
+    }
+    </script>
+
+    <template>
+      <button @click="updateCount">
+        My Friend Likes {{ animal }}
+      </button>
+    </template>
+    ```
+
+    ```tsx Solid
+    import { store } from './store'
+
+    function Button(props: { animals: 'dogs' | 'cats' }) {
+      const updateCount = () => {
+        store.setState((state) => ({
+          ...state,
+          [props.animals]: state[props.animals] + 1,
+        }))
+      }
+
+      return (
+        <button onClick={updateCount}>
+          Increment
+        </button>
+      )
+    }
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Compose Your Application">
+    Bring it all together in your application:
+
+    <CodeGroup>
+    ```tsx React
+    function App() {
+      return (
+        <div>
+          <h1>How many of your friends like cats or dogs?</h1>
+          <p>
+            Press one of the buttons to add a counter of how many of your friends
+            like cats or dogs
+          </p>
+          <Increment animal="dogs" />
+          <Display animal="dogs" />
+          <Increment animal="cats" />
+          <Display animal="cats" />
+        </div>
+      )
+    }
+    ```
+
+    ```vue Vue
+    <script setup>
+    import Increment from './Increment.vue'
+    import Display from './Display.vue'
+    </script>
+
+    <template>
+      <div>
+        <h1>How many of your friends like cats or dogs?</h1>
+        <p>
+          Press one of the buttons to add a counter of how many of your friends like
+          cats or dogs
+        </p>
+        <Increment animal="dogs" />
+        <Display animal="dogs" />
+        <Increment animal="cats" />
+        <Display animal="cats" />
+      </div>
+    </template>
+    ```
+
+    ```tsx Solid
+    function App() {
+      return (
+        <div>
+          <h1>How many of your friends like cats or dogs?</h1>
+          <p>
+            Press one of the buttons to add a counter of how many of your friends
+            like cats or dogs
+          </p>
+          <Button animals="dogs" />
+          <Display animals="dogs" />
+          <Button animals="cats" />
+          <Display animals="cats" />
+        </div>
+      )
+    }
+    ```
+    </CodeGroup>
+  </Step>
+</Steps>
+
+## Core Concepts
+
+Now that you've built your first store, let's explore the key concepts:
+
+### Creating Stores
+
+You can create stores with values or functions:
+
+```typescript
+import { createStore } from '@tanstack/store'
+
+// Store with a value
+const countStore = createStore(0)
+
+// Store with an object
+const userStore = createStore({
+  name: 'John',
+  age: 30,
+})
+```
+
+### Derived Stores
+
+Create stores that compute values from other stores:
+
+```typescript
+const count = createStore(5)
+
+// Derived store automatically updates when count changes
+const double = createStore(() => count.state * 2)
+
+console.log(double.state) // 10
+count.setState(() => 10)
+console.log(double.state) // 20
+```
+
+You can access the previous computed value:
+
+```typescript
+const count = createStore(1)
+
+const sum = createStore<number>((prev) => {
+  return count.state + (prev ?? 0)
+})
+
+console.log(sum.state) // 1
+count.setState(() => 2)
+console.log(sum.state) // 3
+```
+
+### Subscriptions
+
+Subscribe to store changes for side effects:
+
+```typescript
+const count = createStore(0)
+
+const { unsubscribe } = count.subscribe((state) => {
+  console.log('Count changed to:', state)
+})
+
+count.setState(() => 5) // Logs: "Count changed to: 5"
+
+// Cleanup
+unsubscribe()
+```
+
+### Batched Updates
+
+Batch multiple updates to trigger subscribers only once:
+
+```typescript
+import { batch } from '@tanstack/store'
+
+const countStore = createStore(0)
+
+// Subscribers will only trigger once with the final value
+batch(() => {
+  countStore.setState(() => 1)
+  countStore.setState(() => 2)
+})
+
+console.log(countStore.state) // 2
+```
+
+## Framework-Specific Examples
+
+### React Complete Example
+
+Here's the complete React example from the source code:
+
+```tsx
+import ReactDOM from 'react-dom/client'
+import { Store, useStore } from '@tanstack/react-store'
+
+// Create store outside of components
+export const store = new Store({
+  dogs: 0,
+  cats: 0,
+})
+
+// Display component with fine-grained subscriptions
+const Display = ({ animal }: { animal: 'dogs' | 'cats' }) => {
+  const count = useStore(store, (state) => state[animal])
+  return <div>{`${animal}: ${count}`}</div>
+}
+
+// Update helper
+const updateState = (animal: 'dogs' | 'cats') => {
+  store.setState((state) => ({
+    ...state,
+    [animal]: state[animal] + 1,
+  }))
+}
+
+// Increment component
+const Increment = ({ animal }: { animal: 'dogs' | 'cats' }) => (
+  <button onClick={() => updateState(animal)}>
+    My Friend Likes {animal}
+  </button>
+)
+
+function App() {
+  return (
+    <div>
+      <h1>How many of your friends like cats or dogs?</h1>
+      <Increment animal="dogs" />
+      <Display animal="dogs" />
+      <Increment animal="cats" />
+      <Display animal="cats" />
+    </div>
+  )
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root')!)
+root.render(<App />)
+```
+
+### Vue Complete Example
+
+```vue
+<!-- store.ts -->
+<script lang="ts">
+import { Store } from '@tanstack/vue-store'
+
+export const store = new Store({
+  dogs: 0,
+  cats: 0,
+})
+
+export function updateState(animal: 'dogs' | 'cats') {
+  store.setState((state) => ({
+    ...state,
+    [animal]: state[animal] + 1,
+  }))
+}
+</script>
+
+<!-- Display.vue -->
+<script setup>
+import { useStore } from '@tanstack/vue-store'
+import { store } from './store'
+
+const props = defineProps({ animal: String })
+const count = useStore(store, (state) => state[props.animal])
+</script>
+
+<template>
+  <div>{{ animal }}: {{ count }}</div>
+</template>
+
+<!-- App.vue -->
+<script setup>
+import Increment from './Increment.vue'
+import Display from './Display.vue'
+</script>
+
+<template>
+  <h1>How many of your friends like cats or dogs?</h1>
+  <Increment animal="dogs" />
+  <Display animal="dogs" />
+  <Increment animal="cats" />
+  <Display animal="cats" />
+</template>
+```
+
+### Solid Complete Example
+
+```tsx
+import { Store, useStore } from '@tanstack/solid-store'
+import { render } from 'solid-js/web'
+
+// Create store outside of components
+export const store = new Store({
+  cats: 0,
+  dogs: 0,
+})
+
+// Display component
+export const Display = (props: { animals: 'dogs' | 'cats' }) => {
+  const count = useStore(store, (state) => state[props.animals])
+  return <div>{props.animals}: {count()}</div>
+}
+
+// Button component
+export const Button = (props: { animals: 'dogs' | 'cats' }) => {
+  return (
+    <button
+      onClick={() => {
+        store.setState((state) => ({
+          ...state,
+          [props.animals]: state[props.animals] + 1,
+        }))
+      }}
+    >
+      Increment
+    </button>
+  )
+}
+
+const App = () => {
+  return (
+    <div>
+      <h1>How many of your friends like cats or dogs?</h1>
+      <Button animals="dogs" />
+      <Display animals="dogs" />
+      <Button animals="cats" />
+      <Display animals="cats" />
+    </div>
+  )
+}
+
+const root = document.getElementById('root')
+render(() => <App />, root!)
+```
+
+## Next Steps
+
+You've successfully created your first TanStack Store! Here's what to explore next:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Core Concepts" icon="book" href="/concepts/stores">
+    Deep dive into stores, atoms, and reactivity
+  </Card>
+  <Card title="API Reference" icon="code" href="/reference/store">
+    Explore the complete API documentation
+  </Card>
+  <Card title="Framework Guides" icon="wand-magic-sparkles" href="/framework/react">
+    Framework-specific patterns and best practices
+  </Card>
+  <Card title="Examples" icon="lightbulb" href="/examples">
+    Browse example applications and patterns
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

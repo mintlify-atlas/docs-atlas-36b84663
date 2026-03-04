@@ -1,0 +1,137 @@
+---
+title: ReadonlyAtom
+description: The ReadonlyAtom type represents a read-only reactive state container
+---
+
+# ReadonlyAtom
+
+The `ReadonlyAtom<T>` type represents a read-only reactive state container that can be read and subscribed to, but cannot be directly modified.
+
+## Type Definition
+
+```typescript
+/**
+ * An atom that is read-only and cannot be set.
+ *
+ * @example
+ *
+ * ```ts
+ * const atom = createAtom(() => 42);
+ * // @ts-expect-error - Cannot set a readonly atom
+ * atom.set(43);
+ * ```
+ */
+interface ReadonlyAtom<T> extends BaseAtom<T> {}
+
+interface BaseAtom<T> extends Subscribable<T>, Readable<T> {}
+```
+
+## Properties
+
+### `get`
+
+Inherited from `Readable<T>`. Returns the current value of the atom.
+
+**Type:**
+```typescript
+() => T
+```
+
+### `subscribe`
+
+Inherited from `Subscribable<T>`. Subscribes to changes in the atom's value.
+
+**Type:**
+```typescript
+((observer: Observer<T>) => Subscription) &
+  ((
+    next: (value: T) => void,
+    error?: (error: any) => void,
+    complete?: () => void,
+  ) => Subscription)
+```
+
+## Usage Examples
+
+### Creating a readonly atom
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const writableAtom = atom(42)
+const readonlyAtom: ReadonlyAtom<number> = writableAtom
+
+// Reading is allowed
+console.log(readonlyAtom.get()) // 42
+
+// Setting is not allowed (TypeScript error)
+// readonlyAtom.set(43) // Error: Property 'set' does not exist
+```
+
+### Derived readonly atoms
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const countAtom = atom(0)
+const doubleCountAtom = atom((get) => get(countAtom) * 2)
+
+// doubleCountAtom is effectively readonly
+console.log(doubleCountAtom.get()) // 0
+
+countAtom.set(5)
+console.log(doubleCountAtom.get()) // 10
+
+// Cannot directly set a derived atom
+// doubleCountAtom.set(20) // Error if typed as ReadonlyAtom
+```
+
+### Subscribing to readonly atoms
+
+```typescript
+import { atom } from '@tanstack/store'
+
+const sourceAtom = atom(1)
+const readonlyAtom: ReadonlyAtom<number> = sourceAtom
+
+// Subscribe to changes
+const subscription = readonlyAtom.subscribe((value) => {
+  console.log('Value changed:', value)
+})
+
+// Changes to the source are reflected
+sourceAtom.set(2) // Logs: "Value changed: 2"
+
+subscription.unsubscribe()
+```
+
+### Using as function parameter
+
+```typescript
+import { atom, type ReadonlyAtom } from '@tanstack/store'
+
+function useAtomValue<T>(atom: ReadonlyAtom<T>): T {
+  // Function only needs to read, not write
+  return atom.get()
+}
+
+const myAtom = atom(42)
+const value = useAtomValue(myAtom) // Works with both Atom and ReadonlyAtom
+console.log(value) // 42
+```
+
+## When to Use
+
+`ReadonlyAtom<T>` is useful when:
+
+- You want to expose an atom for reading without allowing external modifications
+- Creating derived/computed atoms that depend on other atoms
+- Enforcing read-only access in function parameters or return types
+- Building public APIs where internal state should not be directly modified
+
+## Related Types
+
+- [Atom](/api/types/atom) - The writable version with a `set` method
+- [Observer](/api/types/observer) - The observer pattern for subscriptions
+- [Subscription](/api/types/subscription) - The subscription object returned by subscribe
+- [AtomOptions](/api/types/atom-options) - Configuration options for creating atoms

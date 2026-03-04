@@ -1,0 +1,107 @@
+---
+title: useStore
+description: React hook for subscribing to TanStack Store state
+---
+
+## Reference
+
+### `useStore`
+
+```tsx
+function useStore<TAtom extends AnyAtom | undefined, T>(
+  atom: TAtom,
+  selector: (
+    snapshot: TAtom extends { get: () => infer TSnapshot }
+      ? TSnapshot
+      : undefined,
+  ) => T,
+  compare?: (a: T, b: T) => boolean
+): T
+```
+
+A React hook that subscribes to a TanStack Store atom and returns the selected state. The component will re-render when the selected state changes according to the comparison function.
+
+<ParamField path="atom" type="AnyAtom | undefined">
+  The store atom to subscribe to. Can be `undefined` to support conditional usage.
+</ParamField>
+
+<ParamField path="selector" type="(snapshot: TSnapshot) => T">
+  A function that selects a slice of state from the atom's snapshot. Use this to optimize re-renders by selecting only the data your component needs.
+</ParamField>
+
+<ParamField path="compare" type="(a: T, b: T) => boolean" default="Object.is">
+  Optional comparison function to determine if the selected state has changed. Defaults to reference equality (`Object.is`). Use `shallow` for shallow object comparison.
+</ParamField>
+
+### Returns
+
+<ResponseField name="T" type="T">
+  The selected state value from the atom.
+</ResponseField>
+
+## Usage
+
+### Basic Usage
+
+```tsx
+import { useStore } from '@tanstack/react-store'
+import { store } from './store'
+
+function Counter() {
+  const count = useStore(store, (state) => state.count)
+
+  return <div>Count: {count}</div>
+}
+```
+
+### With Custom Comparison
+
+```tsx
+import { useStore, shallow } from '@tanstack/react-store'
+import { store } from './store'
+
+function UserProfile() {
+  // Only re-render if user object properties change (shallow comparison)
+  const user = useStore(
+    store,
+    (state) => ({ name: state.name, email: state.email }),
+    shallow
+  )
+
+  return (
+    <div>
+      <p>{user.name}</p>
+      <p>{user.email}</p>
+    </div>
+  )
+}
+```
+
+### Selecting Multiple Values
+
+```tsx
+import { useStore } from '@tanstack/react-store'
+import { store } from './store'
+
+function Dashboard() {
+  const stats = useStore(store, (state) => ({
+    total: state.items.length,
+    completed: state.items.filter(i => i.done).length
+  }))
+
+  return (
+    <div>
+      <p>Total: {stats.total}</p>
+      <p>Completed: {stats.completed}</p>
+    </div>
+  )
+}
+```
+
+## Notes
+
+- Built on top of React's `useSyncExternalStoreWithSelector` for optimal concurrent rendering support
+- Automatically handles subscription cleanup when the component unmounts
+- The selector function should be stable or memoized to avoid unnecessary re-subscriptions
+- Supports `undefined` atoms for conditional store usage
+- Uses reference equality by default - provide a custom compare function for object comparisons
